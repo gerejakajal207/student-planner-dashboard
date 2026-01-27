@@ -9,19 +9,17 @@ export default function Pomodoro() {
   const [longBreak, setLongBreak] = useState(20);
   const [interval, setInterval] = useState(4);
 
-  const [timeLeft, setTimeLeft] = useState(focusTime * 60); // seconds
+  const [timeLeft, setTimeLeft] = useState(focusTime * 60); 
   const [isRunning, setIsRunning] = useState(false);
 
-  const startTimeRef = useRef(null); // timestamp when timer started
-  const elapsedRef = useRef(0); // seconds elapsed before pause
+  const startTimeRef = useRef(null); 
+  const elapsedRef = useRef(0); 
   const requestRef = useRef(null);
 
-  // Reset timer when focusTime changes
   useEffect(() => {
     resetTimer();
   }, [focusTime]);
 
-  // Timer function
   const tick = () => {
     const now = Date.now();
     const elapsed = Math.floor((now - startTimeRef.current) / 1000) + elapsedRef.current;
@@ -100,12 +98,10 @@ export default function Pomodoro() {
 
           <h1 className="mb-8 text-3xl font-bold text-[#1a2b4d]">Focus Time</h1>
 
-          {/* Timer Circle */}
           <div className="relative mb-8 flex h-40 w-40 items-center justify-center rounded-full border-8 border-gray-300">
             <div className="text-3xl font-bold">{formatTime(timeLeft)}</div>
           </div>
 
-          {/* Buttons */}
           <div className="flex gap-4">
             <button
               onClick={toggleTimer}
