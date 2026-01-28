@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import PomodoroSettings from "./PomodoroSettings";
+import Button from "../../ui/Button";
 
 export default function Pomodoro() {
   const [showSettings, setShowSettings] = useState(false);
@@ -9,11 +10,11 @@ export default function Pomodoro() {
   const [longBreak, setLongBreak] = useState(20);
   const [interval, setInterval] = useState(4);
 
-  const [timeLeft, setTimeLeft] = useState(focusTime * 60); 
+  const [timeLeft, setTimeLeft] = useState(focusTime * 60);
   const [isRunning, setIsRunning] = useState(false);
 
-  const startTimeRef = useRef(null); 
-  const elapsedRef = useRef(0); 
+  const startTimeRef = useRef(null);
+  const elapsedRef = useRef(0);
   const requestRef = useRef(null);
 
   useEffect(() => {
@@ -103,16 +104,7 @@ export default function Pomodoro() {
           </div>
 
           <div className="flex gap-4">
-            <button
-              onClick={toggleTimer}
-              className={`rounded-xl px-6 py-3 text-2xl shadow-md ${
-                isRunning
-                  ? "bg-[#5b9fff] text-white hover:bg-[#2b59c3]"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
-              } transition-colors`}
-            >
-              {isRunning ? "Pause" : "Start"}
-            </button>
+            <Button data={{ text: isRunning ? "Pause" : "Start", onClick: toggleTimer }} />
 
             <button
               onClick={resetTimer}
@@ -136,6 +128,7 @@ export default function Pomodoro() {
           interval={interval}
           setInterval={setInterval}
         />
+        
       )}
     </div>
   );

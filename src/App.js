@@ -2,17 +2,12 @@
 import "./App.css";
 
 // COMPONENTS //
-import PomodoroSettings from "./components/PomodoroSettings";
-import Pomodoro from "./components/Pomodoro";
-
-// OTHERS //
-import Button from "./ui/Button";
+import PomodoroCard from "./components/Pomodoro/PomodoroCard";
 
 function App() {
   return (
     <div>
-      <PomodoroSettings />
-      <Pomodoro />
+      <PomodoroCard />
     </div>
   );
 }
