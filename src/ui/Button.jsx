@@ -35,11 +35,8 @@ export default function Button({ data }) {
   };
 
   return (
-    <button
-      onClick={handleClick}
-      className="cursor-pointer rounded-2xl bg-n-primary px-5 py-5 md:px-6 md:py-3.5 lg:gap-2 lg:px-7 lg:py-4"
-    >
-      <p className="text-sm font-medium text-primary-foreground">{text}</p>
+    <button onClick={handleClick} className="rounded-xl px-6 py-3 shadow-md bg-n-primary hover:bg-blue-500 hover:border hover:border-n-primary hover:scale-100">
+      <p className="text-2xl font-medium text-primary-foreground">{text}</p>
     </button>
   );
 }
