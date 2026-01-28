@@ -6,6 +6,8 @@
   :root {
     --font-size: 16px;
     --radius: 0.625rem;
+    --font-primary: "Poppins", system-ui, sans-serif;
+    --font-secondary: "Lato", system-ui, sans-serif;
 
     /* Focus Nest Colors (Light Mode) */
     --fn-primary: #2b59c3;
@@ -29,7 +31,7 @@
     --fn-auth-icon-bg: #ebf2ff;
 
     /* System Colors (Light Mode) */
-    --background: #ffffff;
+    --background: #f8faff;
     --foreground: oklch(0.145 0 0);
     --card: #ffffff;
     --card-foreground: oklch(0.145 0 0);
@@ -101,15 +103,7 @@
   }
 
   body {
-    @apply bg-background text-foreground;
-    font-size: var(--font-size);
-  }
-
-  h1 {
-    @apply text-2xl font-medium;
-  }
-  h2 {
-    @apply text-xl font-medium;
+    @apply min-h-screen bg-background text-foreground font-secondary;
   }
 }
 
