@@ -12,21 +12,26 @@ export default function Button({ data }) {
 
   const {
     text,
-    link = "/", // default homepage
-    target = "_blank", // default new tab
+    link,
+    target = "_blank",
+    onClick, // optional function
   } = data;
 
-  const handleClick = () => {
-    if (!link) return;
-
-    // internal route
-    if (link.startsWith("/")) {
-      navigate(link);
+  const handleClick = (e) => {
+    // 1) if onClick exists, execute it
+    if (typeof onClick === "function") {
+      onClick(e);
       return;
     }
 
-    // external link
-    window.open(link, target);
+    // 2) else, handle link navigation
+    if (!link) return;
+
+    if (link.startsWith("/")) {
+      navigate(link);
+    } else {
+      window.open(link, target);
+    }
   };
 
   return (
@@ -42,7 +47,12 @@ export default function Button({ data }) {
 Button.propTypes = {
   data: PropTypes.shape({
     text: PropTypes.string.isRequired,
+
+    // optional link navigation
     link: PropTypes.string,
     target: PropTypes.oneOf(["_self", "_blank"]),
+
+    // optional click function
+    onClick: PropTypes.func,
   }).isRequired,
 };
