@@ -1,16 +1,20 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  darkMode: "media",
+  darkMode: "class",
   content: ["./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        primary: "var(--font-primary)",
+        secondary: "var(--font-secondary)",
+      },
       colors: {
         "n-primary": "var(--fn-primary)",
         "n-text": "var(--fn-text)",
         "n-action": "var(--fn-action)",
         "n-bg": "var(--fn-bg)",
         "n-card-bg": "var(--fn-card-bg)",
-        
+
         // Kanban
         "n-kanban-backlog-head": "var(--fn-kanban-backlog-header)",
         "n-kanban-backlog-card": "var(--fn-kanban-backlog-card)",
