@@ -5,11 +5,12 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import PomodoroSettings from './components/PomodoroSettings';
 import Pomodoro from './components/Pomodoro';
+import TodaysPage from './pages/todays-page';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <Pomodoro/>
+    <TodaysPage/>
   </React.StrictMode>
 );
 
