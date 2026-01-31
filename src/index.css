@@ -29,7 +29,7 @@
     --fn-auth-icon-bg: #ebf2ff;
 
     /* System Colors (Light Mode) */
-    --background: #ffffff;
+    --background: #f8faff;
     --foreground: oklch(0.145 0 0);
     --card: #ffffff;
     --card-foreground: oklch(0.145 0 0);
