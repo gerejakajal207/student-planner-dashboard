@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import './App.css';
 
 // Import your pages
-import AboutUsPage from './pages/aboutUsPage';
+import AboutUsPage from './pages/AboutUsPage';
 // Import other pages when they're ready
 // import HomePage from './pages/HomePage';
 // import TodayPage from './pages/TodayPage';
