@@ -1,10 +1,13 @@
+// STYLES //
 import "./App.css";
-import Button from "./ui/Button";
+
+// COMPONENTS //
+import Navbar from "./components/layout/Navbar";
 
 function App() {
   return (
     <div>
-      <Button data={{ text: "ADD TEXT" }} />
+      <Navbar />
     </div>
   );
 }

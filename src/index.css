@@ -37,7 +37,7 @@
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: #030213;
+    --primary: #0f172a;
     --primary-foreground: oklch(1 0 0);
     --secondary: oklch(0.95 0.0058 264.53);
     --secondary-foreground: #030213;
@@ -57,7 +57,7 @@
     --fn-primary: #5b9fff;
     --fn-text: #e4e9f2;
     --fn-action: #5b9fff;
-    --fn-bg: #0d1117;
+    --fn-bg: #0f172a;
     --fn-card-bg: #161b22;
     --fn-kanban-backlog-header: #6c7a96;
     --fn-kanban-backlog-card: #1c2128;
@@ -73,7 +73,7 @@
     --fn-auth-problem: #8a9cb8;
     --fn-auth-solution: #5b9fff;
     --fn-auth-icon-bg: #1a2332;
-    --background: #0d1117;
+    --background: #0f172a;
     --foreground: #e4e9f2;
     --card: #161b22;
     --card-foreground: #e4e9f2;
