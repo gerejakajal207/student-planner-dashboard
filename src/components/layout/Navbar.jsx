@@ -10,17 +10,18 @@ export default function Navbar() {
   useEffect(() => {
     setDark(document.documentElement.classList.contains("dark"));
   }, []);
-
+  
   const toggleTheme = () => {
+    const newTheme = dark ? "light" : "dark";
     document.documentElement.classList.toggle("dark");
     setDark(!dark);
+    localStorage.setItem("theme", newTheme);
   };
 
   const navClass = ({ isActive }) =>
     isActive
       ? "bg-white text-primary px-4 py-1 rounded-full font-medium"
       : "font-medium hover:opacity-90";
-  
 
   return (
     <>
@@ -63,6 +64,7 @@ export default function Navbar() {
         </div>
       </nav>
 
+      {/* Extended Menu  */}
       {open && (
         <div className="fixed inset-0 z-50 flex">
           <button
