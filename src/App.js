@@ -1,24 +1,36 @@
-import logo from './logo.svg';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
+
+// Import your pages
+import AboutUsPage from './pages/aboutUsPage';
+// Import other pages when they're ready
+// import HomePage from './pages/HomePage';
+// import TodayPage from './pages/TodayPage';
+// import BoardPage from './pages/BoardPage';
+// import CalendarPage from './pages/CalendarPage';
+// import ProfilePage from './pages/ProfilePage';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <div className="App">
+        <Routes>
+          {/* Default route - redirect to about for testing */}
+          <Route path="/" element={<Navigate to="/about" replace />} />
+          
+          {/* About Us Page Route */}
+          <Route path="/about" element={<AboutUsPage />} />
+          
+          {/* Add other routes when pages are ready */}
+          {/* <Route path="/home" element={<HomePage />} /> */}
+          {/* <Route path="/today" element={<TodayPage />} /> */}
+          {/* <Route path="/board" element={<BoardPage />} /> */}
+          {/* <Route path="/calendar" element={<CalendarPage />} /> */}
+          {/* <Route path="/profile" element={<ProfilePage />} /> */}
+        </Routes>
+      </div>
+    </Router>
   );
 }
 
