@@ -1,6 +1,8 @@
 // STYLES //
 import "./App.css";
 import { useEffect } from "react";
+import './App.css';
+import TodaysPage from './pages/TodaysMode';
 
 // COMPONENTS //
 import Navbar from "./components/layout/Navbar";
@@ -20,7 +22,9 @@ function App() {
     <div>
       {/* While rendering your component, DO NOT REMOVE THIS NAVBAR */}
       <Navbar />
+       <TodaysPage/>
     </div>
+   
   );
 }
 
