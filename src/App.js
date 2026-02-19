@@ -1,6 +1,9 @@
 // REACT //
 import { useEffect } from "react";
 
+// MODULES //
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+
 // STYLES //
 import "./App.css";
 
@@ -24,12 +27,14 @@ function App() {
   }, []);
 
   return (
-    <div>
-      {/* While rendering your component, DO NOT REMOVE THIS NAVBAR */}
+    <Router>
       <Navbar />
-      <TodaysPage />
-      <CalendarPage />
-    </div>
+      <Routes>
+        <Route path="/todays-page" element={<TodaysPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/" element={<TodaysPage />} />
+      </Routes>
+    </Router>
   );
 }
 
