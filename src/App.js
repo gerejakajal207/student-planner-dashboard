@@ -1,10 +1,16 @@
+// REACT //
+import { useEffect } from "react";
+
 // STYLES //
 import "./App.css";
-import { useEffect } from "react";
-import TodaysPage from './pages/TodaysMode';
 
 // COMPONENTS //
-import Navbar from "./components/layout/Navbar";
+import Navbar from "./components/layout/NavBar";
+
+// OTHERS //
+import TodaysPage from "./pages/TodaysMode";
+import CalendarPage from "./pages/CalendarPage";
+
 function App() {
   // Get the theme from local storage and set accordingly
   // DO NOT REMOVE THI WHILE RENDERING YOUR PAGES
@@ -21,9 +27,9 @@ function App() {
     <div>
       {/* While rendering your component, DO NOT REMOVE THIS NAVBAR */}
       <Navbar />
-       <TodaysPage/>
+      <TodaysPage />
+      <CalendarPage />
     </div>
-   
   );
 }
 
