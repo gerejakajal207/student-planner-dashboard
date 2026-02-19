@@ -1,7 +1,6 @@
 // STYLES //
 import "./App.css";
 import { useEffect } from "react";
-import './App.css';
 import TodaysPage from './pages/TodaysMode';
 
 // COMPONENTS //

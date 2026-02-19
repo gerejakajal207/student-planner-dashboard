@@ -55,7 +55,7 @@ function NavItem({ to, icon: Icon, label, sub, close }) {
       onClick={close}
       className="flex items-start gap-3 rounded-md p-2 hover:bg-muted"
     >
-      <Icon size={18} className="mt-1 text-n-primary" />
+      <Icon size={18} className="mt-1 text-text" />
       <div>
         <p className="font-medium">{label}</p>
         <p className="text-xs text-muted-foreground">{sub}</p>

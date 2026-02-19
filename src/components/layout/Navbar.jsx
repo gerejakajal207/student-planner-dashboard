@@ -20,7 +20,7 @@ export default function Navbar() {
 
   const navClass = ({ isActive }) =>
     isActive
-      ? "bg-white text-primary px-4 py-1 rounded-full font-medium"
+      ? "bg-background text-primary px-4 py-1 rounded-full font-medium"
       : "font-medium hover:opacity-90";
 
   return (

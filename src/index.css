@@ -37,7 +37,7 @@
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: #0f172a;
+    --primary: #5b9fff;
     --primary-foreground: oklch(1 0 0);
     --secondary: oklch(0.95 0.0058 264.53);
     --secondary-foreground: #030213;
@@ -54,7 +54,7 @@
 
   /* MANUAL OVERRIDE: Keep this so class="dark" still works if needed */
   .dark {
-    --fn-primary: #5b9fff;
+    --fn-primary: #0f172a;
     --fn-text: #e4e9f2;
     --fn-action: #5b9fff;
     --fn-bg: #0f172a;
@@ -73,14 +73,14 @@
     --fn-auth-problem: #8a9cb8;
     --fn-auth-solution: #5b9fff;
     --fn-auth-icon-bg: #1a2332;
-    --background: #0f172a;
+    --background: #0e1a37;
     --foreground: #e4e9f2;
     --card: #161b22;
     --card-foreground: #e4e9f2;
     --popover: #161b22;
     --popover-foreground: #e4e9f2;
     --primary: #5b9fff;
-    --primary-foreground: #0d1117;
+    --primary-foreground: oklch(0.145 0 0);
     --secondary: #21262d;
     --secondary-foreground: #e4e9f2;
     --muted: #21262d;
@@ -103,7 +103,7 @@
   }
 
   body {
-    @apply min-h-screen bg-background text-foreground font-secondary;
+    @apply min-h-screen bg-background font-secondary text-foreground;
   }
 }
 
