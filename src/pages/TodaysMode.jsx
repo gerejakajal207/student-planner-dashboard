@@ -3,7 +3,7 @@ import Pomodoro from "../components/Pomodoro";
 import PomodoroSettings from "../components/PomodoroSettings";
 import { Plus, TriangleAlert } from "lucide-react";
 import QuoteCard from "../components/QuoteCard";
-import ProgressCard from "../components/ProgressCard";
+import ProgressCard from "../components/todays-mode/ProgressCard";
 
 export default function TodaysPage() {
   const [openSettings, setOpenSettings] = useState(false);
