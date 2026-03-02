@@ -8,11 +8,12 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import "./App.css";
 
 // COMPONENTS //
-import Navbar from "./components/layout/NavBar";
+import Navbar from "./components/layout/Navbar";
 
 // OTHERS //
 import TodaysPage from "./pages/TodaysMode";
 import CalendarPage from "./pages/CalendarPage";
+import HomePage from "./pages/HomePage";
 
 function App() {
   // Get the theme from local storage and set accordingly
@@ -32,7 +33,7 @@ function App() {
       <Routes>
         <Route path="/todays-page" element={<TodaysPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/" element={<TodaysPage />} />
+        <Route path="/" element={<HomePage />} />
       </Routes>
     </Router>
   );

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 
 export default function QuoteCard() {
-
   // Backup quotes (used only if API fails)
   const localQuotes = [
     { text: "Success is the sum of small efforts repeated daily.", author: "Robert Collier" },
@@ -12,7 +11,7 @@ export default function QuoteCard() {
 
   const [quote, setQuote] = useState({
     text: "Loading motivational quote...",
-    author: ""
+    author: "",
   });
 
   // Fetch quote from API
@@ -26,12 +25,10 @@ export default function QuoteCard() {
 
       setQuote({
         text: data.quote,
-        author: data.author
+        author: data.author,
       });
-
     } catch (error) {
-
-      // fallback to local quote
+      console.error("Failed to fetch quote:", error);
       const randomIndex = Math.floor(Math.random() * localQuotes.length);
       setQuote(localQuotes[randomIndex]);
     }
@@ -43,69 +40,16 @@ export default function QuoteCard() {
   }, []);
 
   return (
-    <div
-      className="
-      rounded-xl
-      border
-      border-gray-200 dark:border-gray-700
-      border-l-8 border-l-blue-600
-      bg-white dark:bg-gray-900
-      shadow-sm
-      hover:shadow-md
-      transition-all
-      p-5 sm:p-8
-      "
-    >
-
-      {/* Heading */}
-      <h3 className="
-        font-bold 
-        text-xl sm:text-2xl md:text-3xl 
-        mb-3
-        text-blue-700 dark:text-blue-400
-      ">
-        Daily Motivation
-      </h3>
-
+    <div className="rounded-xl border border-l-8 border-gray-200 border-l-blue-600 bg-white p-5 shadow-sm transition-all hover:shadow-md dark:border-gray-700 dark:bg-gray-900 sm:p-8">
       {/* Quote */}
-      <p className="
-        max-w-3xl
-        text-lg sm:text-xl md:text-2xl
-        font-semibold
-        italic
-        leading-relaxed
-        text-gray-800 dark:text-gray-200
-      ">
+      <p className="max-w-3xl text-sm font-normal italic leading-relaxed text-gray-800 dark:text-gray-200 md:text-xl">
         "{quote.text}"
       </p>
 
       {/* Author */}
-      <p className="
-        mt-3
-        text-sm sm:text-base
-        text-gray-500 dark:text-gray-400
-      ">
+      <p className="mt-3 text-[12px] text-gray-500 dark:text-gray-400 md:text-sm">
         — {quote.author}
       </p>
-
-      {/* Button */}
-      <button
-        onClick={fetchQuote}
-        className="
-          mt-5
-          rounded-lg
-          bg-blue-600
-          px-4 py-2
-          text-white
-          font-medium
-          hover:bg-blue-700
-          active:scale-95
-          transition
-        "
-      >
-        New Quote
-      </button>
-
     </div>
   );
 }
