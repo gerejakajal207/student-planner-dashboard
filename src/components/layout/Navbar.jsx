@@ -28,7 +28,7 @@ export default function Navbar() {
     <>
       <nav className="sticky top-0 z-40 flex h-16 items-center justify-between bg-primary px-6 text-primary-foreground shadow-sm">
         {/* LOGO */}
-        <Link to="/">
+        <Link to="/home">
           <img
             src="/images/focus-nest-logo.jpeg"
             alt="Focus Nest"
