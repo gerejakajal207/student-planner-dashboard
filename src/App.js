@@ -15,6 +15,7 @@ import Navbar from "./components/layout/Navbar";
 import TodaysPage from "./pages/TodaysMode";
 import AboutUsPage from "./pages/AboutUsPage";
 import CalendarPage from "./pages/CalendarPage";
+import TaskModal from "./components/TaskModal";
 
 function App() {
   // Get the theme from local storage and set accordingly
@@ -31,10 +32,11 @@ function App() {
   return (
     <Router>
       <Navbar />
+
       <Routes>
         <Route path="/todays-page" element={<TodaysPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/" element={<TodaysPage />} />
+        <Route path="/" element={<TaskModal />} />
         <Route path="/about-us" element={<AboutUsPage />} />
       </Routes>
     </Router>
