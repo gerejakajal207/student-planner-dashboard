@@ -14,14 +14,16 @@ export function TaskProvider({ children }) {
       category: form.category,
       priority: form.priority,
       effort: form.effort,
-      date: new Date(form.taskDueDate + "T00:00:00"), // ← must be a Date object
+      date: new Date(form.taskDueDate + "T00:00:00"),
       status: "Todo",
     };
     setTasks((prev) => [...prev, newTask]);
   }
 
   function updateTaskStatus(id, status) {
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status } : t)));
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, status } : t))
+    );
   }
 
   function deleteTask(id) {

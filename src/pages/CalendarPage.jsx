@@ -3,22 +3,12 @@ import TaskModal from "../components/TaskModal";
 import { useTasks } from "../components/TaskContext";
 
 const months = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
 ];
 
 export default function CalendarPage() {
-  const { tasks: events, addTask } = useTasks();
+  const { tasks: events, addTask, deleteTask } = useTasks();
 
   const today = new Date();
   const [currentDate, setCurrentDate] = useState(today);
@@ -43,9 +33,7 @@ export default function CalendarPage() {
   const handleDateClick = (day) => {
     const clicked = new Date(year, month, day);
     const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
-    if (clicked < todayMidnight) return; // ← block past dates
-
+    if (clicked < todayMidnight) return;
     setClickedDay(day);
     setSelectedDate(clicked);
     setModalOpen(true);
@@ -54,19 +42,21 @@ export default function CalendarPage() {
   const getEventsForDay = (day) =>
     events.filter(
       (e) =>
-        e.date.getDate() === day && e.date.getMonth() === month && e.date.getFullYear() === year
+        e.date.getDate() === day &&
+        e.date.getMonth() === month &&
+        e.date.getFullYear() === year
     );
 
   const exams = events.filter((e) => e.category === "Exam");
   const assignments = events.filter((e) => e.category === "Assignment");
   const classes = events.filter((e) => e.category === "Class");
-  const hobbies = events.filter((e) => e.category === "Hobby"); // ← ADD
+  const hobbies = events.filter((e) => e.category === "Hobby");
 
   const categoryColors = {
     Exam: "bg-red-400",
     Assignment: "bg-yellow-400",
     Class: "bg-green-400",
-    Hobby: "bg-pink-400", // ← ADD
+    Hobby: "bg-pink-400",
   };
 
   const clickedDateISO = clickedDay
@@ -88,9 +78,7 @@ export default function CalendarPage() {
               className="rounded-lg border p-2 text-sm shadow-sm sm:text-base"
             >
               {months.map((m, i) => (
-                <option key={i} value={i}>
-                  {m}
-                </option>
+                <option key={i} value={i}>{m}</option>
               ))}
             </select>
             <select
@@ -111,16 +99,10 @@ export default function CalendarPage() {
           </div>
         </div>
         <div className="flex gap-3 self-start md:self-auto">
-          <button
-            onClick={prevMonth}
-            className="rounded-lg bg-white px-3 py-2 shadow hover:bg-gray-100 sm:px-4"
-          >
+          <button onClick={prevMonth} className="rounded-lg bg-white px-3 py-2 shadow hover:bg-gray-100 sm:px-4">
             {"<"}
           </button>
-          <button
-            onClick={nextMonth}
-            className="rounded-lg bg-white px-3 py-2 shadow hover:bg-gray-100 sm:px-4"
-          >
+          <button onClick={nextMonth} className="rounded-lg bg-white px-3 py-2 shadow hover:bg-gray-100 sm:px-4">
             {">"}
           </button>
         </div>
@@ -130,25 +112,25 @@ export default function CalendarPage() {
       <div className="overflow-x-auto">
         <div className="grid min-w-[700px] grid-cols-7 gap-3 rounded-2xl bg-white p-4 shadow-lg sm:gap-4 sm:p-6">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-            <div key={d} className="text-center text-sm font-bold text-gray-500 sm:text-base">
-              {d}
-            </div>
+            <div key={d} className="text-center text-sm font-bold text-gray-500 sm:text-base">{d}</div>
           ))}
-          {blanks.map((_, i) => (
-            <div key={"b" + i}></div>
-          ))}
+          {blanks.map((_, i) => <div key={"b" + i}></div>)}
           {days.map((day) => {
             const isToday =
-              today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+              today.getDate() === day &&
+              today.getMonth() === month &&
+              today.getFullYear() === year;
             const isPast =
-              new Date(year, month, day) <
-              new Date(today.getFullYear(), today.getMonth(), today.getDate());
+              new Date(year, month, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
             const dayEvents = getEventsForDay(day);
             return (
               <div
                 key={day}
                 onClick={() => handleDateClick(day)}
-                className={`min-h-[90px] rounded-xl border p-2 transition sm:min-h-[110px] ${isToday ? "border-indigo-400 bg-indigo-50" : ""} ${isPast ? "cursor-not-allowed opacity-40" : "cursor-pointer hover:shadow-md"}`}
+                className={`min-h-[90px] rounded-xl border p-2 transition sm:min-h-[110px]
+                  ${isToday ? "border-indigo-400 bg-indigo-50" : ""}
+                  ${isPast ? "cursor-not-allowed opacity-40" : "cursor-pointer hover:shadow-md"}
+                `}
               >
                 <div className="text-sm font-semibold sm:text-base">{day}</div>
                 <div className="mt-1 space-y-1">
@@ -168,12 +150,12 @@ export default function CalendarPage() {
       </div>
 
       {/* EVENT LIST */}
-      <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { title: "Exams", data: exams, color: "border-red-400" },
-          { title: "Assignments", data: assignments, color: "border-yellow-400" },
-          { title: "Classes", data: classes, color: "border-green-400" },
-          { title: "Hobbies", data: hobbies, color: "border-pink-400" }, // ← ADD
+          { title: "Exams",       data: exams,       color: "border-red-400"    },
+          { title: "Assignments", data: assignments,  color: "border-yellow-400" },
+          { title: "Classes",     data: classes,      color: "border-green-400"  },
+          { title: "Hobbies",     data: hobbies,      color: "border-pink-400"   },
         ].map((section, i) => (
           <div key={i} className={`rounded-2xl border-t-4 bg-white p-5 shadow ${section.color}`}>
             <h2 className="mb-4 text-lg font-bold">{section.title}</h2>
@@ -181,9 +163,19 @@ export default function CalendarPage() {
               <p className="text-gray-400">No tasks yet 🎉</p>
             ) : (
               <ul className="space-y-2">
-                {section.data.map((event, index) => (
-                  <li key={index} className="rounded-lg bg-gray-100 px-3 py-2 text-sm">
-                    {event.title} — {event.date.toLocaleDateString()}
+                {section.data.map((event) => (
+                  <li
+                    key={event.id}
+                    className="flex items-center justify-between rounded-lg bg-gray-100 px-3 py-2 text-sm group"
+                  >
+                    <span className="truncate">{event.title} — {event.date.toLocaleDateString()}</span>
+                    <button
+                      onClick={() => deleteTask(event.id)}
+                      className="ml-2 flex-shrink-0 rounded-full p-1 text-gray-400 opacity-0 transition-all hover:bg-red-100 hover:text-red-500 group-hover:opacity-100"
+                      title="Delete task"
+                    >
+                      ✕
+                    </button>
                   </li>
                 ))}
               </ul>
