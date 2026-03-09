@@ -17,6 +17,7 @@ import TodaysPage from "./pages/TodaysMode";
 import AboutUsPage from "./pages/AboutUsPage";
 import CalendarPage from "./pages/CalendarPage";
 import KanbanPage from "./pages/KanbanBoard";
+import HomePage from "./pages/HomePage";
 
 function App() {
   // Get the theme from local storage and set accordingly
@@ -38,7 +39,7 @@ function App() {
         <Routes>
           <Route path="/todays-page" element={<TodaysPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/" element={<TaskModal />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/board" element={<KanbanPage />} />
           <Route path="/about-us" element={<AboutUsPage />} />
         </Routes>
