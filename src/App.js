@@ -1,7 +1,5 @@
 // REACT //
 import { useEffect } from "react";
-import { TaskProvider } from "./components/TaskContext";
-
 
 // MODULES //
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
@@ -10,6 +8,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import "./App.css";
 
 // COMPONENTS //
+import { TaskProvider } from "./components/TaskContext";
 import Navbar from "./components/layout/Navbar";
 import TaskModal from "./components/TaskModal";
 
@@ -17,6 +16,7 @@ import TaskModal from "./components/TaskModal";
 import TodaysPage from "./pages/TodaysMode";
 import AboutUsPage from "./pages/AboutUsPage";
 import CalendarPage from "./pages/CalendarPage";
+import KanbanPage from "./pages/KanbanBoard";
 
 function App() {
   // Get the theme from local storage and set accordingly
@@ -32,16 +32,17 @@ function App() {
 
   return (
     <TaskProvider>
-    <Router>
-      <Navbar />
+      <Router>
+        <Navbar />
 
-      <Routes>
-        <Route path="/todays-page" element={<TodaysPage />} />
-        <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/" element={<TaskModal />} />
-        <Route path="/about-us" element={<AboutUsPage />} />
-      </Routes>
-    </Router>
+        <Routes>
+          <Route path="/todays-page" element={<TodaysPage />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/" element={<TaskModal />} />
+          <Route path="/board" element={<KanbanPage />} />
+          <Route path="/about-us" element={<AboutUsPage />} />
+        </Routes>
+      </Router>
     </TaskProvider>
   );
 }
