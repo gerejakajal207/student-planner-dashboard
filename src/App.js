@@ -1,6 +1,7 @@
 // REACT //
-import React from "react";
 import { useEffect } from "react";
+import { TaskProvider } from "./components/TaskContext";
+
 
 // MODULES //
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
@@ -10,6 +11,7 @@ import "./App.css";
 
 // COMPONENTS //
 import Navbar from "./components/layout/Navbar";
+import TaskModal from "./components/TaskModal";
 
 // OTHERS //
 import TodaysPage from "./pages/TodaysMode";
@@ -29,15 +31,18 @@ function App() {
   }, []);
 
   return (
+    <TaskProvider>
     <Router>
       <Navbar />
+
       <Routes>
         <Route path="/todays-page" element={<TodaysPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/" element={<TodaysPage />} />
+        <Route path="/" element={<TaskModal />} />
         <Route path="/about-us" element={<AboutUsPage />} />
       </Routes>
     </Router>
+    </TaskProvider>
   );
 }
 
