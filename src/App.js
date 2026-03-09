@@ -8,11 +8,15 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import "./App.css";
 
 // COMPONENTS //
+import { TaskProvider } from "./components/TaskContext";
 import Navbar from "./components/layout/Navbar";
+import TaskModal from "./components/TaskModal";
 
 // OTHERS //
 import TodaysPage from "./pages/TodaysMode";
+import AboutUsPage from "./pages/AboutUsPage";
 import CalendarPage from "./pages/CalendarPage";
+import KanbanPage from "./pages/KanbanBoard";
 import HomePage from "./pages/HomePage";
 
 function App() {
@@ -28,14 +32,19 @@ function App() {
   }, []);
 
   return (
-    <Router>
-      <Navbar />
-      <Routes>
-        <Route path="/todays-page" element={<TodaysPage />} />
-        <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/" element={<HomePage />} />
-      </Routes>
-    </Router>
+    <TaskProvider>
+      <Router>
+        <Navbar />
+
+        <Routes>
+          <Route path="/todays-page" element={<TodaysPage />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/" element={<HomePage />} />
+          <Route path="/board" element={<KanbanPage />} />
+          <Route path="/about-us" element={<AboutUsPage />} />
+        </Routes>
+      </Router>
+    </TaskProvider>
   );
 }
 
