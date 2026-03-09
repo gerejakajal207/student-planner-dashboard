@@ -1,6 +1,7 @@
 // REACT //
-import React from "react";
 import { useEffect } from "react";
+import { TaskProvider } from "./components/TaskContext";
+
 
 // MODULES //
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
@@ -10,12 +11,12 @@ import "./App.css";
 
 // COMPONENTS //
 import Navbar from "./components/layout/Navbar";
+import TaskModal from "./components/TaskModal";
 
 // OTHERS //
 import TodaysPage from "./pages/TodaysMode";
 import AboutUsPage from "./pages/AboutUsPage";
 import CalendarPage from "./pages/CalendarPage";
-import TaskModal from "./components/TaskModal";
 
 function App() {
   // Get the theme from local storage and set accordingly
@@ -30,6 +31,7 @@ function App() {
   }, []);
 
   return (
+    <TaskProvider>
     <Router>
       <Navbar />
 
@@ -40,6 +42,7 @@ function App() {
         <Route path="/about-us" element={<AboutUsPage />} />
       </Routes>
     </Router>
+    </TaskProvider>
   );
 }
 

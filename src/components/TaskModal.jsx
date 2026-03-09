@@ -6,13 +6,11 @@ const PRIORITY_COLORS = {
   Medium: "bg-yellow-500",
   High: "bg-red-500",
 };
-
 const EFFORT_COLORS = {
   Low: "bg-blue-400",
   Medium: "bg-orange-400",
   High: "bg-purple-500",
 };
-
 const CATEGORY_ICONS = {
   Class: "📚",
   Exam: "📝",
@@ -47,7 +45,7 @@ function Dropdown({ label, options, selected, onSelect, colorMap }) {
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="mt-1 flex items-center justify-between w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="mt-1 flex w-full items-center justify-between rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         <span className="flex items-center gap-2">
           {colorMap && (
@@ -61,7 +59,6 @@ function Dropdown({ label, options, selected, onSelect, colorMap }) {
           className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
-
       {isOpen && (
         <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
           {options.map((option) => (
@@ -98,10 +95,16 @@ const defaultState = {
   effort: "Medium",
 };
 
-export default function TaskModal({ isOpen, onClose }) {
+export default function TaskModal({ isOpen, onClose, onSubmit, initialDueDate }) {
   const [form, setForm] = useState(defaultState);
-
+  const [showToast, setShowToast] = useState(false);
   const today = new Date().toISOString().split("T")[0];
+
+  useEffect(() => {
+    if (isOpen && initialDueDate) {
+      setForm((prev) => ({ ...prev, taskDueDate: initialDueDate }));
+    }
+  }, [isOpen, initialDueDate]);
 
   function handleChange(field) {
     return (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -113,9 +116,11 @@ export default function TaskModal({ isOpen, onClose }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    console.log(form);
+    if (onSubmit) onSubmit(form);
     setForm(defaultState);
     onClose();
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
   }
 
   function handleClose() {
@@ -123,7 +128,6 @@ export default function TaskModal({ isOpen, onClose }) {
     onClose();
   }
 
-  // No longer needs its own "Open Task" button — just renders the modal
   return (
     <>
       {isOpen && (
@@ -152,14 +156,14 @@ export default function TaskModal({ isOpen, onClose }) {
                 ×
               </button>
             </div>
-
             <p className="mb-4 text-xs text-gray-400">
               Fields marked with <span className="text-red-500">*</span> are required.
             </p>
-
             <div className="flex flex-col gap-5">
               <div>
-                <label htmlFor="taskName">Task Name <RequiredStar /></label>
+                <label htmlFor="taskName">
+                  Task Name <RequiredStar />
+                </label>
                 <input
                   id="taskName"
                   type="text"
@@ -171,9 +175,10 @@ export default function TaskModal({ isOpen, onClose }) {
                   required
                 />
               </div>
-
               <div className="flex flex-col">
-                <label htmlFor="taskDescription">Description <RequiredStar /></label>
+                <label htmlFor="taskDescription">
+                  Description <RequiredStar />
+                </label>
                 <textarea
                   id="taskDescription"
                   value={form.taskDescription}
@@ -183,9 +188,10 @@ export default function TaskModal({ isOpen, onClose }) {
                   required
                 />
               </div>
-
               <div className="flex flex-col">
-                <label htmlFor="taskDueDate">Due Date <RequiredStar /></label>
+                <label htmlFor="taskDueDate">
+                  Due Date <RequiredStar />
+                </label>
                 <input
                   type="date"
                   id="taskDueDate"
@@ -196,9 +202,10 @@ export default function TaskModal({ isOpen, onClose }) {
                   required
                 />
               </div>
-
               <div className="flex flex-col">
-                <label htmlFor="subject">Subject <RequiredStar /></label>
+                <label htmlFor="subject">
+                  Subject <RequiredStar />
+                </label>
                 <input
                   type="text"
                   id="subject"
@@ -209,7 +216,6 @@ export default function TaskModal({ isOpen, onClose }) {
                   required
                 />
               </div>
-
               <Dropdown
                 label="Category"
                 options={["Class", "Exam", "Assignment", "Hobby"]}
@@ -231,7 +237,6 @@ export default function TaskModal({ isOpen, onClose }) {
                 colorMap={EFFORT_COLORS}
               />
             </div>
-
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
@@ -248,6 +253,12 @@ export default function TaskModal({ isOpen, onClose }) {
               </button>
             </div>
           </form>
+        </div>
+      )}
+      {showToast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 rounded-xl bg-green-500 px-5 py-3 text-white shadow-lg">
+          <span className="text-lg">✅</span>
+          <span className="text-sm font-medium">Task added successfully!</span>
         </div>
       )}
     </>

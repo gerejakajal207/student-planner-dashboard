@@ -1,19 +1,24 @@
+// REACT //
 import { useState } from "react";
+import { Plus, TriangleAlert } from "lucide-react";
+
+// COMPONENTS //
 import Pomodoro from "../components/Pomodoro";
 import PomodoroSettings from "../components/PomodoroSettings";
-import { Plus, TriangleAlert } from "lucide-react";
 import QuoteCard from "../components/QuoteCard";
 import ProgressCard from "../components/todays-mode/ProgressCard";
 import TaskModal from "../components/TaskModal";
+import { useTasks } from "../components/TaskContext";
 
 export default function TodaysPage() {
+  const { addTask } = useTasks(); // ← ADD THIS
+
   const [openSettings, setOpenSettings] = useState(false);
   const [openTaskModal, setOpenTaskModal] = useState(false);
 
   return (
     <div className="bg-background">
       <div className="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
-
         {/* QUOTE CARD */}
         <div className="mt-8 rounded-xl bg-white p-5 shadow-md sm:mt-10 sm:p-6">
           <QuoteCard />
@@ -65,7 +70,11 @@ export default function TodaysPage() {
       {openSettings && <PomodoroSettings onClose={() => setOpenSettings(false)} />}
 
       {/* TASK MODAL */}
-      <TaskModal isOpen={openTaskModal} onClose={() => setOpenTaskModal(false)} />
+      <TaskModal
+        isOpen={openTaskModal}
+        onClose={() => setOpenTaskModal(false)}
+        onSubmit={addTask}
+      />
     </div>
   );
 }
