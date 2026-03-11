@@ -5,7 +5,7 @@ export default function DrawerContent({ close }) {
   return (
     <div className="space-y-6 p-5">
       <Section title="MAIN MENU">
-        <NavItem to="/home" icon={Home} label="Home" sub="Dashboard overview" close={close} />
+        <NavItem to="/" icon={Home} label="Home" sub="Dashboard overview" close={close} />
         <NavItem
           to="/todays-page"
           icon={LayoutDashboard}
