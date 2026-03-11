@@ -4,17 +4,17 @@ import { Eye, EyeOff, Mail, Lock, ArrowRight } from "lucide-react";
 import { useAuth } from "../components/AuthContext";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, authError, authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
   const [focused, setFocused] = useState("");
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    login(form.email);
-    navigate("/");
+    const success = await login(form.email, form.password);
+    if (success) navigate("/");
   }
 
   return (
@@ -37,8 +37,7 @@ export default function Login() {
         <div className="relative space-y-6">
           <div>
             <h2 className="text-3xl font-bold leading-tight text-white">
-              Welcome back.
-              <br />
+              Welcome back.<br />
               <span className="text-indigo-200">Let's get focused.</span>
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-indigo-200">
@@ -46,16 +45,13 @@ export default function Login() {
             </p>
           </div>
 
-          {/* Testimonial card */}
+          {/* Testimonial */}
           <div className="rounded-2xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
             <p className="text-sm italic leading-relaxed text-indigo-100">
-              "FocusNest completely changed how I manage my study sessions. I went from overwhelmed
-              to on top of everything."
+              "FocusNest completely changed how I manage my study sessions. I went from overwhelmed to on top of everything."
             </p>
             <div className="mt-3 flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-300 text-sm font-bold text-indigo-800">
-                S
-              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-300 text-sm font-bold text-indigo-800">S</div>
               <div>
                 <p className="text-xs font-semibold text-white">Sarah K.</p>
                 <p className="text-xs text-indigo-300">Computer Science student</p>
@@ -153,13 +149,33 @@ export default function Login() {
               </div>
             </div>
 
+            {/* API Error */}
+            {authError && (
+              <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">
+                {authError}
+              </div>
+            )}
+
             {/* Submit */}
             <button
               type="submit"
-              className="group mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition-all hover:bg-indigo-700 active:scale-[0.98]"
+              disabled={authLoading}
+              className="group mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition-all hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Sign In
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              {authLoading ? (
+                <>
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Signing in...
+                </>
+              ) : (
+                <>
+                  Sign In
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </>
+              )}
             </button>
 
             <p className="text-center text-xs text-slate-400">

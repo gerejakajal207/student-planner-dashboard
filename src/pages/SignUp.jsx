@@ -11,7 +11,7 @@ const features = [
 ];
 
 export default function SignUp() {
-  const { signup } = useAuth();
+  const { signup, authError, authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [showPassword, setShowPassword] = useState(false);
@@ -19,11 +19,11 @@ export default function SignUp() {
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
   const [focused, setFocused] = useState("");
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (form.password !== form.confirm) return;
-    signup(form.name, form.email);
-    navigate("/");
+    const success = await signup(form.name, form.email, form.password);
+    if (success) navigate("/");
   }
 
   const passwordStrength = () => {
@@ -54,7 +54,7 @@ export default function SignUp() {
           <span className="text-xl font-bold text-white tracking-tight">FocusNest</span>
         </div>
 
-        {/* Middle content */}
+        {/* Middle */}
         <div className="relative space-y-8">
           <div>
             <h2 className="text-3xl font-bold text-white leading-tight">
@@ -67,10 +67,7 @@ export default function SignUp() {
           </div>
           <div className="grid grid-cols-1 gap-3">
             {features.map((f, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-4 rounded-2xl bg-white/10 backdrop-blur-sm px-4 py-3 border border-white/10"
-              >
+              <div key={i} className="flex items-center gap-4 rounded-2xl bg-white/10 backdrop-blur-sm px-4 py-3 border border-white/10">
                 <span className="text-2xl">{f.emoji}</span>
                 <div>
                   <p className="text-sm font-semibold text-white">{f.title}</p>
@@ -219,13 +216,33 @@ export default function SignUp() {
               )}
             </div>
 
+            {/* API Error */}
+            {authError && (
+              <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">
+                {authError}
+              </div>
+            )}
+
             {/* Submit */}
             <button
               type="submit"
-              className="group mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition-all hover:bg-indigo-700 active:scale-[0.98]"
+              disabled={authLoading}
+              className="group mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition-all hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Create Account
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              {authLoading ? (
+                <>
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Creating account...
+                </>
+              ) : (
+                <>
+                  Create Account
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </>
+              )}
             </button>
 
             <p className="text-center text-xs text-slate-400 leading-relaxed">

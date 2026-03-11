@@ -1,4 +1,5 @@
 import { createContext, useContext, useState } from "react";
+import { api } from "../api";
 
 const AuthContext = createContext();
 
@@ -12,25 +13,72 @@ export function AuthProvider({ children }) {
     }
   });
 
-  function login(email) {
-    const userData = { email, name: email.split("@")[0] };
-    localStorage.setItem("focusnest_user", JSON.stringify(userData));
-    setUser(userData);
+  const [authError, setAuthError] = useState(null);
+  const [authLoading, setAuthLoading] = useState(false);
+
+  async function login(email, password) {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const data = await api.login(email, password);
+      // Save token and user separately
+      localStorage.setItem("focusnest_token", data.access_token);
+      localStorage.setItem("focusnest_user", JSON.stringify(data.user));
+      setUser(data.user);
+      return true;
+    } catch (err) {
+      setAuthError(err.message);
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
   }
 
-  function signup(name, email) {
-    const userData = { name, email };
-    localStorage.setItem("focusnest_user", JSON.stringify(userData));
-    setUser(userData);
+  async function signup(name, email, password) {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const data = await api.register(name, email, password);
+      localStorage.setItem("focusnest_token", data.access_token);
+      localStorage.setItem("focusnest_user", JSON.stringify(data.user));
+      setUser(data.user);
+      return true;
+    } catch (err) {
+      setAuthError(err.message);
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function updateProfile(name, bio) {
+    try {
+      const updated = await api.updateProfile({ name, bio });
+      const newUser = { ...user, ...updated };
+      localStorage.setItem("focusnest_user", JSON.stringify(newUser));
+      setUser(newUser);
+      return true;
+    } catch (err) {
+      return false;
+    }
   }
 
   function logout() {
+    localStorage.removeItem("focusnest_token");
     localStorage.removeItem("focusnest_user");
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      authError,
+      authLoading,
+      login,
+      signup,
+      logout,
+      updateProfile,
+    }}>
       {children}
     </AuthContext.Provider>
   );

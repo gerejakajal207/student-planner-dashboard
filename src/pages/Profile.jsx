@@ -3,15 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { User, Mail, Lock, Eye, EyeOff, Camera, Target, CheckCircle, Flame, Save, ChevronDown, Award, LogOut } from "lucide-react";
 import { useTasks } from "../components/TaskContext";
 import { useAuth } from "../components/AuthContext";
-
-function isToday(date) {
-  const t = new Date();
-  return (
-    date.getDate() === t.getDate() &&
-    date.getMonth() === t.getMonth() &&
-    date.getFullYear() === t.getFullYear()
-  );
-}
+import { api } from "../api";
 
 function StatCard({ icon: Icon, value, label, colorClass, bgClass }) {
   return (
@@ -29,31 +21,62 @@ function StatCard({ icon: Icon, value, label, colorClass, bgClass }) {
 
 export default function Profile() {
   const { tasks } = useTasks();
-  const { user, logout } = useAuth();
+  const { user, logout, updateProfile } = useAuth();
   const navigate = useNavigate();
 
-  const [focused, setFocused] = useState("");
-  const [showCurrentPw, setShowCurrentPw] = useState(false);
-  const [showNewPw, setShowNewPw] = useState(false);
+  const [focused, setFocused]                     = useState("");
+  const [showCurrentPw, setShowCurrentPw]         = useState(false);
+  const [showNewPw, setShowNewPw]                 = useState(false);
   const [showPasswordSection, setShowPasswordSection] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved]                         = useState(false);
+  const [saveError, setSaveError]                 = useState(null);
+  const [pwStatus, setPwStatus]                   = useState(null); // "success" | "error" | null
+  const [pwLoading, setPwLoading]                 = useState(false);
 
   const [profile, setProfile] = useState({
-    name: user?.name ?? "Student",
-    email: user?.email ?? "",
-    bio: "Staying focused, one task at a time.",
+    name:            user?.name  ?? "Student",
+    email:           user?.email ?? "",
+    bio:             user?.bio   ?? "Staying focused, one task at a time.",
     currentPassword: "",
-    newPassword: "",
+    newPassword:     "",
   });
 
+  // ── Live stats ──
   const totalTasks     = tasks.length;
   const doneTasks      = tasks.filter((t) => t.status === "Done").length;
   const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
-  const handleSave = (e) => {
+  // ── Save profile ──
+  const handleSave = async (e) => {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setSaveError(null);
+    const success = await updateProfile(profile.name, profile.bio);
+    if (success) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } else {
+      setSaveError("Failed to save. Please try again.");
+    }
+  };
+
+  // ── Change password ──
+  const handlePasswordChange = async () => {
+    if (!profile.currentPassword || !profile.newPassword) return;
+    setPwLoading(true);
+    setPwStatus(null);
+    try {
+      await api.changePassword(profile.currentPassword, profile.newPassword);
+      setPwStatus("success");
+      setProfile((p) => ({ ...p, currentPassword: "", newPassword: "" }));
+      setTimeout(() => {
+        setPwStatus(null);
+        setShowPasswordSection(false);
+      }, 2000);
+    } catch (err) {
+      setPwStatus("error");
+    } finally {
+      setPwLoading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -63,9 +86,7 @@ export default function Profile() {
 
   const inputClass = (name) =>
     `w-full rounded-xl border-2 bg-white py-3 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:outline-none transition-all duration-200 ${
-      focused === name
-        ? "border-indigo-500 shadow-sm shadow-indigo-100"
-        : "border-slate-200"
+      focused === name ? "border-indigo-500 shadow-sm shadow-indigo-100" : "border-slate-200"
     }`;
 
   return (
@@ -102,7 +123,6 @@ export default function Profile() {
                 <Flame className="h-4 w-4 text-amber-300" />
                 <span className="text-sm font-bold text-white">5 day streak</span>
               </div>
-              {/* Logout button in header */}
               <button
                 onClick={handleLogout}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-xs font-medium text-white/80 hover:bg-white/20 transition-colors"
@@ -121,9 +141,9 @@ export default function Profile() {
         >
           <h2 className="text-base font-bold text-slate-800 mb-4">Your Statistics</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard icon={Target} value={totalTasks}         label="Total Tasks"      colorClass="text-blue-500"    bgClass="bg-blue-50"    />
-            <StatCard icon={Award}  value={doneTasks}          label="Completed"        colorClass="text-emerald-500" bgClass="bg-emerald-50" />
-            <StatCard icon={Award}  value={`${completionRate}%`} label="Completion Rate" colorClass="text-violet-500"  bgClass="bg-violet-50" />
+            <StatCard icon={Target} value={totalTasks}            label="Total Tasks"      colorClass="text-blue-500"    bgClass="bg-blue-50"    />
+            <StatCard icon={Award}  value={doneTasks}             label="Completed"        colorClass="text-emerald-500" bgClass="bg-emerald-50" />
+            <StatCard icon={Award}  value={`${completionRate}%`}  label="Completion Rate"  colorClass="text-violet-500"  bgClass="bg-violet-50"  />
           </div>
         </div>
 
@@ -153,18 +173,19 @@ export default function Profile() {
               </div>
             </div>
 
-            {/* Email */}
+            {/* Email — read only, email changes need backend verification */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">Email Address</label>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                Email Address
+                <span className="ml-2 text-xs text-slate-400 font-normal">(cannot be changed)</span>
+              </label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
                 <input
                   type="email"
                   value={profile.email}
-                  onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                  onFocus={() => setFocused("email")}
-                  onBlur={() => setFocused("")}
-                  className={inputClass("email")}
+                  readOnly
+                  className="w-full rounded-xl border-2 border-slate-100 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-400 cursor-not-allowed focus:outline-none"
                 />
               </div>
             </div>
@@ -185,66 +206,12 @@ export default function Profile() {
               />
             </div>
 
-            {/* ── CHANGE PASSWORD TOGGLE ── */}
-            <div className="rounded-xl border border-slate-200 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowPasswordSection((p) => !p)}
-                className="flex w-full items-center justify-between px-4 py-3.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100">
-                    <Lock className="h-3.5 w-3.5 text-slate-500" />
-                  </div>
-                  <span>Change Password</span>
-                </div>
-                <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-300 ${showPasswordSection ? "rotate-180" : ""}`} />
-              </button>
-
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showPasswordSection ? "max-h-64 opacity-100" : "max-h-0 opacity-0"}`}>
-                <div className="space-y-4 border-t border-slate-100 px-4 py-4 bg-slate-50">
-                  {/* Current Password */}
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Current Password</label>
-                    <div className="relative">
-                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <input
-                        type={showCurrentPw ? "text" : "password"}
-                        value={profile.currentPassword}
-                        onChange={(e) => setProfile({ ...profile, currentPassword: e.target.value })}
-                        onFocus={() => setFocused("current")}
-                        onBlur={() => setFocused("")}
-                        placeholder="Enter current password"
-                        className={`w-full rounded-xl border-2 bg-white py-3 pl-10 pr-10 text-sm placeholder-slate-400 focus:outline-none transition-all duration-200 ${focused === "current" ? "border-indigo-500 shadow-sm shadow-indigo-100" : "border-slate-200"}`}
-                      />
-                      <button type="button" onClick={() => setShowCurrentPw((p) => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
-                        {showCurrentPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* New Password */}
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-700">New Password</label>
-                    <div className="relative">
-                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <input
-                        type={showNewPw ? "text" : "password"}
-                        value={profile.newPassword}
-                        onChange={(e) => setProfile({ ...profile, newPassword: e.target.value })}
-                        onFocus={() => setFocused("new")}
-                        onBlur={() => setFocused("")}
-                        placeholder="Enter new password"
-                        className={`w-full rounded-xl border-2 bg-white py-3 pl-10 pr-10 text-sm placeholder-slate-400 focus:outline-none transition-all duration-200 ${focused === "new" ? "border-indigo-500 shadow-sm shadow-indigo-100" : "border-slate-200"}`}
-                      />
-                      <button type="button" onClick={() => setShowNewPw((p) => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
-                        {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
+            {/* Save error */}
+            {saveError && (
+              <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">
+                {saveError}
               </div>
-            </div>
+            )}
 
             {/* Save */}
             <button
@@ -253,11 +220,98 @@ export default function Profile() {
                 saved ? "bg-emerald-500 shadow-emerald-200" : "bg-indigo-600 shadow-indigo-200 hover:bg-indigo-700"
               }`}
             >
-              {saved ? <><CheckCircle className="h-4 w-4" /> Saved!</> : <><Save className="h-4 w-4" /> Save Changes</>}
+              {saved
+                ? <><CheckCircle className="h-4 w-4" /> Saved!</>
+                : <><Save className="h-4 w-4" /> Save Changes</>
+              }
             </button>
           </form>
-        </div>
 
+          {/* ── CHANGE PASSWORD ── separate from the main form */}
+          <div className="mt-5 rounded-xl border border-slate-200 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => { setShowPasswordSection((p) => !p); setPwStatus(null); }}
+              className="flex w-full items-center justify-between px-4 py-3.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100">
+                  <Lock className="h-3.5 w-3.5 text-slate-500" />
+                </div>
+                <span>Change Password</span>
+              </div>
+              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-300 ${showPasswordSection ? "rotate-180" : ""}`} />
+            </button>
+
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showPasswordSection ? "max-h-80 opacity-100" : "max-h-0 opacity-0"}`}>
+              <div className="space-y-4 border-t border-slate-100 px-4 py-4 bg-slate-50">
+
+                {/* Current Password */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Current Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      type={showCurrentPw ? "text" : "password"}
+                      value={profile.currentPassword}
+                      onChange={(e) => setProfile({ ...profile, currentPassword: e.target.value })}
+                      onFocus={() => setFocused("current")}
+                      onBlur={() => setFocused("")}
+                      placeholder="Enter current password"
+                      className={`w-full rounded-xl border-2 bg-white py-3 pl-10 pr-10 text-sm placeholder-slate-400 focus:outline-none transition-all duration-200 ${focused === "current" ? "border-indigo-500 shadow-sm shadow-indigo-100" : "border-slate-200"}`}
+                    />
+                    <button type="button" onClick={() => setShowCurrentPw((p) => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+                      {showCurrentPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* New Password */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">New Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      type={showNewPw ? "text" : "password"}
+                      value={profile.newPassword}
+                      onChange={(e) => setProfile({ ...profile, newPassword: e.target.value })}
+                      onFocus={() => setFocused("new")}
+                      onBlur={() => setFocused("")}
+                      placeholder="Enter new password"
+                      className={`w-full rounded-xl border-2 bg-white py-3 pl-10 pr-10 text-sm placeholder-slate-400 focus:outline-none transition-all duration-200 ${focused === "new" ? "border-indigo-500 shadow-sm shadow-indigo-100" : "border-slate-200"}`}
+                    />
+                    <button type="button" onClick={() => setShowNewPw((p) => !p)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+                      {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Password status messages */}
+                {pwStatus === "success" && (
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-600 flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4" /> Password updated successfully!
+                  </div>
+                )}
+                {pwStatus === "error" && (
+                  <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">
+                    Current password is incorrect. Please try again.
+                  </div>
+                )}
+
+                {/* Update password button */}
+                <button
+                  type="button"
+                  onClick={handlePasswordChange}
+                  disabled={pwLoading || !profile.currentPassword || !profile.newPassword}
+                  className="w-full rounded-xl bg-slate-800 py-3 text-sm font-semibold text-white transition-all hover:bg-slate-900 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {pwLoading ? "Updating..." : "Update Password"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
 
       <style>{`
@@ -268,4 +322,4 @@ export default function Profile() {
       `}</style>
     </div>
   );
-}   
+}
