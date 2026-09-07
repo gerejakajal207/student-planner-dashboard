@@ -1,5 +1,10 @@
 import os
 from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.database import Base, engine
+from app.routers import users, tasks, quotes, ai
 
 load_dotenv()
 
