@@ -28,8 +28,8 @@ def create_task(
 ):
     task = models.Task(
         title=data.title,
-        description=data.description,
-        subject=data.subject,
+        description=data.description or "",
+        subject=data.subject or "",
         category=data.category,
         priority=data.priority,
         effort=data.effort,

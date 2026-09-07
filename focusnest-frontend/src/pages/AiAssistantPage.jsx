@@ -135,7 +135,7 @@ function MarkdownContent({ children }) {
 
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function AiAssistantPage() {
-  const { addTask } = useTasks();
+  const { addTask, fetchTasks } = useTasks();
 
   const [activeTab, setActiveTab] = useState("schedule");
   const [loading, setLoading] = useState(false);
@@ -292,21 +292,36 @@ export default function AiAssistantPage() {
           category: t.category || "Class",
           priority: t.priority || "Medium",
           effort: t.effort || "Medium",
-          due_date: t.due_date,
+          due_date: t.due_date || t.date || new Date().toISOString().split("T")[0],
         }))
       );
-      // Refresh local task list so Kanban/Calendar update immediately
-      for (const t of daily_tasks) {
-        await addTask({ taskName: t.title, taskDescription: t.description || "", taskDueDate: t.date, subject: subject.trim(), category: t.category || "Class", priority: t.priority || "Medium", effort: t.effort || "Medium" });
+      // Refresh task list so Kanban/Calendar update immediately
+      if (fetchTasks) {
+        await fetchTasks();
       }
-      await addTask({ taskName: exam_task.title, taskDescription: exam_task.description || "", taskDueDate: exam_task.date, subject: subject.trim(), category: "Exam", priority: "High", effort: "High" });
     } catch {
       // batch-add failed — try individual adds as fallback
       try {
         for (const t of daily_tasks) {
-          await addTask({ taskName: t.title, taskDescription: t.description || "", taskDueDate: t.date, subject: subject.trim(), category: t.category || "Class", priority: t.priority || "Medium", effort: t.effort || "Medium" });
+          await addTask({
+            taskName: t.title,
+            taskDescription: t.description || "",
+            taskDueDate: t.date || t.due_date || new Date().toISOString().split("T")[0],
+            subject: subject.trim(),
+            category: t.category || "Class",
+            priority: t.priority || "Medium",
+            effort: t.effort || "Medium"
+          });
         }
-        await addTask({ taskName: exam_task.title, taskDescription: exam_task.description || "", taskDueDate: exam_task.date, subject: subject.trim(), category: "Exam", priority: "High", effort: "High" });
+        await addTask({
+          taskName: exam_task.title,
+          taskDescription: exam_task.description || "",
+          taskDueDate: exam_task.date || exam_task.due_date || new Date().toISOString().split("T")[0],
+          subject: subject.trim(),
+          category: "Exam",
+          priority: "High",
+          effort: "High"
+        });
       } catch (fallbackErr) {
         showToast(`Failed to add tasks: ${fallbackErr.message}`, "error");
         setAddingToSchedule(false);

@@ -110,12 +110,13 @@ class McqRequest(BaseModel):
 
 class BatchTaskItem(BaseModel):
     title: str
-    description: str = ""
-    subject: str = ""
-    category: str = "Class"
-    priority: str = "Medium"
-    effort: str = "Medium"
-    due_date: str  # ISO string or YYYY-MM-DD
+    description: Optional[str] = ""
+    subject: Optional[str] = ""
+    category: Optional[str] = "Class"
+    priority: Optional[str] = "Medium"
+    effort: Optional[str] = "Medium"
+    due_date: Optional[str] = None
+    date: Optional[str] = None
 
 
 class BatchTaskRequest(BaseModel):
@@ -394,40 +395,46 @@ def batch_add_tasks(
 ):
     created_tasks = []
     for item in req.tasks:
-        # Parse due_date
-        try:
-            if "T" in item.due_date:
-                parsed_date = datetime.fromisoformat(item.due_date)
-            else:
-                parsed_date = datetime.strptime(item.due_date, "%Y-%m-%d")
-        except Exception:
-            parsed_date = datetime.now()
+        raw_date = item.due_date or item.date or ""
+        parsed_date = datetime.now()
+        if raw_date:
+            try:
+                date_str = str(raw_date).strip()
+                if "T" in date_str:
+                    parsed_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                else:
+                    parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
+            except Exception:
+                parsed_date = datetime.now()
 
         # Map category enum
         cat = models.CategoryEnum.Class
-        for c in models.CategoryEnum:
-            if c.value.lower() == item.category.lower():
-                cat = c
-                break
+        if item.category:
+            for c in models.CategoryEnum:
+                if c.value.lower() == str(item.category).lower():
+                    cat = c
+                    break
 
         # Map priority enum
         prio = models.PriorityEnum.Medium
-        for p in models.PriorityEnum:
-            if p.value.lower() == item.priority.lower():
-                prio = p
-                break
+        if item.priority:
+            for p in models.PriorityEnum:
+                if p.value.lower() == str(item.priority).lower():
+                    prio = p
+                    break
 
         # Map effort enum
         eff = models.EffortEnum.Medium
-        for e in models.EffortEnum:
-            if e.value.lower() == item.effort.lower():
-                eff = e
-                break
+        if item.effort:
+            for e in models.EffortEnum:
+                if e.value.lower() == str(item.effort).lower():
+                    eff = e
+                    break
 
         task = models.Task(
             title=item.title,
-            description=item.description,
-            subject=item.subject,
+            description=item.description or "",
+            subject=item.subject or "",
             category=cat,
             priority=prio,
             effort=eff,

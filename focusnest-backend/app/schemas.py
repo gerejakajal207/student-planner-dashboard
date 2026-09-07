@@ -47,11 +47,11 @@ class Token(BaseModel):
 
 class TaskCreate(BaseModel):
     title:       str
-    description: str
-    subject:     str
-    category:    CategoryEnum
-    priority:    PriorityEnum
-    effort:      EffortEnum
+    description: Optional[str] = ""
+    subject:     Optional[str] = ""
+    category:    CategoryEnum = CategoryEnum.Class
+    priority:    PriorityEnum = PriorityEnum.Medium
+    effort:      EffortEnum = EffortEnum.Medium
     due_date:    datetime
 
     class Config:
