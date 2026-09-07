@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
@@ -20,6 +21,7 @@ origins_set = {
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:3003",
+    "https://student-planner-dashboard-lemon.vercel.app",
 }
 
 if raw_origins:
@@ -43,6 +45,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal Server Error: {str(exc)}"},
+    )
 
 @app.on_event("startup")
 def on_startup():
