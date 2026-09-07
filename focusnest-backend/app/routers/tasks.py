@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-from .. import models, schemas, auth
-from ..database import get_db
+from app import models, schemas, auth
+from app.database import get_db
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -59,6 +59,43 @@ def update_task_status(
         raise HTTPException(status_code=404, detail="Task not found")
 
     task.status = data.status
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.put("/{task_id}", response_model=schemas.TaskOut)
+def update_task(
+    task_id: int,
+    data: schemas.TaskUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    task = db.query(models.Task).filter(
+        models.Task.id == task_id,
+        models.Task.owner_id == current_user.id
+    ).first()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if data.title is not None:
+        task.title = data.title
+    if data.description is not None:
+        task.description = data.description
+    if data.subject is not None:
+        task.subject = data.subject
+    if data.category is not None:
+        task.category = data.category
+    if data.priority is not None:
+        task.priority = data.priority
+    if data.effort is not None:
+        task.effort = data.effort
+    if data.due_date is not None:
+        task.due_date = data.due_date
+    if data.status is not None:
+        task.status = data.status
+
     db.commit()
     db.refresh(task)
     return task

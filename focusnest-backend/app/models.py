@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from .database import Base
 import enum
@@ -35,12 +35,24 @@ class User(Base):
     bio             = Column(String(500), default="")
     hashed_password = Column(String(255), nullable=False)
 
-    tasks = relationship("Task", back_populates="owner", cascade="all, delete-orphan")
+    tasks         = relationship("Task", back_populates="owner", cascade="all, delete-orphan")
+    reset_tokens  = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id         = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    token      = Column(String(255), unique=True, index=True, nullable=False)
+    user_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used       = Column(Boolean, default=False, nullable=False)
+
+    user = relationship("User", back_populates="reset_tokens")
 
 
 class Task(Base):
     __tablename__ = "tasks"
-
     id          = Column(Integer, primary_key=True, index=True, autoincrement=True)
     title       = Column(String(200), nullable=False)
     description = Column(Text, default="")
@@ -51,5 +63,4 @@ class Task(Base):
     due_date    = Column(DateTime, nullable=False)
     status      = Column(Enum(StatusEnum), default=StatusEnum.Todo)
     owner_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
-
-    owner = relationship("User", back_populates="tasks")
+    owner       = relationship("User", back_populates="tasks")

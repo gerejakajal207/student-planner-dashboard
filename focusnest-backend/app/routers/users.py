@@ -1,21 +1,102 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+import secrets
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
-from .. import models, schemas, auth
-from ..database import get_db
+
+from app import models, schemas, auth
+from app.database import get_db
+
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
+from dotenv import load_dotenv
+
+load_dotenv(override=True)   # override=True forces re-read even if already loaded
 
 router = APIRouter(tags=["Auth & Users"])
 
+RESET_TOKEN_EXPIRE_MINUTES = 15
+
+
+def _get_mail_config() -> ConnectionConfig:
+    """
+    Build ConnectionConfig fresh on every call so that updates to .env
+    are always picked up without restarting the server.
+    """
+    load_dotenv(override=True)
+    return ConnectionConfig(
+        MAIL_USERNAME   = os.getenv("MAIL_USERNAME", ""),
+        MAIL_PASSWORD   = os.getenv("MAIL_PASSWORD", ""),
+        MAIL_FROM       = os.getenv("MAIL_FROM", "noreply@focusnest.app"),
+        MAIL_FROM_NAME  = os.getenv("MAIL_FROM_NAME", "FocusNest"),
+        MAIL_SERVER     = os.getenv("MAIL_SERVER", "smtp.gmail.com"),
+        MAIL_PORT       = int(os.getenv("MAIL_PORT", "587")),
+        MAIL_STARTTLS   = os.getenv("MAIL_STARTTLS", "True") == "True",
+        MAIL_SSL_TLS    = os.getenv("MAIL_SSL_TLS", "False") == "True",
+        USE_CREDENTIALS = True,
+        VALIDATE_CERTS  = True,
+    )
+
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+
+async def _send_reset_email(email: str, name: str, token: str):
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    reset_link = f"{frontend_url}/reset-password?token={token}"
+    html_body = f"""
+    <div style="font-family:sans-serif;max-width:520px;margin:auto;padding:32px 24px;background:#f8faff;border-radius:12px;">
+      <div style="text-align:center;margin-bottom:24px;">
+        <span style="font-size:32px;">&#127919;</span>
+        <h2 style="color:#4f46e5;margin:8px 0 0;">FocusNest</h2>
+      </div>
+      <h3 style="color:#1e293b;">Password Reset Request</h3>
+      <p style="color:#475569;">Hi <strong>{name}</strong>,</p>
+      <p style="color:#475569;">
+        We received a request to reset your FocusNest password.
+        Click the button below to set a new password.
+        This link is valid for <strong>15 minutes</strong>.
+      </p>
+      <div style="text-align:center;margin:32px 0;">
+        <a href="{reset_link}"
+           style="background:#4f46e5;color:#fff;padding:14px 32px;border-radius:8px;
+                  text-decoration:none;font-weight:600;font-size:15px;display:inline-block;">
+          Reset Password
+        </a>
+      </div>
+      <p style="color:#94a3b8;font-size:13px;">
+        If you didn't request this, you can safely ignore this email — your password won't change.
+      </p>
+      <p style="color:#94a3b8;font-size:12px;">
+        Or copy this link into your browser:<br/>
+        <a href="{reset_link}" style="color:#6366f1;">{reset_link}</a>
+      </p>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
+      <p style="color:#cbd5e1;font-size:12px;text-align:center;">
+        &copy; FocusNest &middot; Student Productivity Platform
+      </p>
+    </div>
+    """
+    message = MessageSchema(
+        subject="Reset your FocusNest password",
+        recipients=[email],
+        body=html_body,
+        subtype=MessageType.html,
+    )
+    fm = FastMail(_get_mail_config())
+    await fm.send_message(message)
+
+
+# ── Auth endpoints ────────────────────────────────────────────────────────────
 
 @router.post("/auth/register", response_model=schemas.Token)
 def register(data: schemas.UserRegister, db: Session = Depends(get_db)):
-    # Check email not already taken
     existing = db.query(models.User).filter(models.User.email == data.email).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
-
     user = models.User(
         name=data.name,
         email=data.email,
@@ -25,32 +106,94 @@ def register(data: schemas.UserRegister, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-
     token = auth.create_token({"sub": user.email})
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": user
-    }
+    return {"access_token": token, "token_type": "bearer", "user": user}
 
 
 @router.post("/auth/login", response_model=schemas.Token)
 def login(data: schemas.UserLogin, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == data.email).first()
-
     if not user or not auth.verify_password(data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
-
     token = auth.create_token({"sub": user.email})
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": user
-    }
+    return {"access_token": token, "token_type": "bearer", "user": user}
 
+
+@router.post("/auth/forgot-password")
+async def forgot_password(
+    data: schemas.ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    SAFE_MSG = {"message": "If that email is registered, a password reset link has been sent."}
+
+    user = db.query(models.User).filter(models.User.email == data.email).first()
+    if not user:
+        return SAFE_MSG
+
+    # Invalidate all previous unused tokens for this user
+    db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.user_id == user.id,
+        models.PasswordResetToken.used == False,  # noqa: E712
+    ).update({"used": True})
+    db.commit()
+
+    # Create new token valid for 15 minutes
+    raw_token = secrets.token_urlsafe(48)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
+
+    reset_token = models.PasswordResetToken(
+        token=raw_token,
+        user_id=user.id,
+        expires_at=expires_at,
+        used=False,
+    )
+    db.add(reset_token)
+    db.commit()
+
+    background_tasks.add_task(_send_reset_email, user.email, user.name, raw_token)
+
+    return SAFE_MSG
+
+
+@router.post("/auth/reset-password")
+def reset_password(
+    data: schemas.ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    INVALID = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="This reset link is invalid or has expired."
+    )
+
+    record = db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.token == data.token
+    ).first()
+
+    if not record or record.used:
+        raise INVALID
+
+    now_utc = datetime.now(timezone.utc)
+    expires = record.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+
+    if now_utc > expires:
+        record.used = True
+        db.commit()
+        raise INVALID
+
+    record.user.hashed_password = auth.hash_password(data.new_password)
+    record.used = True
+    db.commit()
+
+    return {"message": "Password reset successfully. You can now log in with your new password."}
+
+
+# ── User profile endpoints ────────────────────────────────────────────────────
 
 @router.get("/users/me", response_model=schemas.UserOut)
 def get_me(current_user: models.User = Depends(auth.get_current_user)):

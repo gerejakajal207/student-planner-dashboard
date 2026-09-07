@@ -31,6 +31,13 @@ class PasswordChange(BaseModel):
     current_password: str
     new_password: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -52,6 +59,19 @@ class TaskCreate(BaseModel):
 
 class TaskStatusUpdate(BaseModel):
     status: StatusEnum
+
+    class Config:
+        use_enum_values = True
+
+class TaskUpdate(BaseModel):
+    title:       Optional[str] = None
+    description: Optional[str] = None
+    subject:     Optional[str] = None
+    category:    Optional[CategoryEnum] = None
+    priority:    Optional[PriorityEnum] = None
+    effort:      Optional[EffortEnum] = None
+    due_date:    Optional[datetime] = None
+    status:      Optional[StatusEnum] = None
 
     class Config:
         use_enum_values = True
