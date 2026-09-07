@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronDown, Calendar, BookOpen } from "lucide-react";
 
 const PRIORITY_COLORS = {

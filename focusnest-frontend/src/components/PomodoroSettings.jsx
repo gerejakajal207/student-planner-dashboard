@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { X, Check, RotateCcw } from "lucide-react";
 
 export default function PomodoroSettings({

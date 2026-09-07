@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useDrag, useDrop, DndProvider } from "react-dnd";
 import { HTML5toTouch } from "rdndmb-html5-to-touch";
 import { MultiBackend } from "react-dnd-multi-backend";
@@ -287,8 +287,8 @@ export default function KanbanPage() {
                   isHeavyDay={isHeavyDay}
                   onEdit={handleEdit}
                   onDeleteRequest={(id) => setConfirmDelete(id)}
-                  onDeleteRequest={(id) => setConfirmDelete(id)}
                 />
+
               ))}
             </div>
           </div>

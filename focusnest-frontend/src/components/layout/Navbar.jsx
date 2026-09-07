@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { NavLink, Link } from "react-router-dom";
 import { Menu, Moon, Sun, X, Sparkles } from "lucide-react";
 import DrawerContent from "./DrawerContent";

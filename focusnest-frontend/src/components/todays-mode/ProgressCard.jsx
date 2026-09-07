@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { useTasks } from "../TaskContext";
 import { CheckCircle2, CircleDashed, Clock, Trophy } from "lucide-react";
 

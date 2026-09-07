@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Settings, Play, Pause, RotateCcw, SkipForward, Flame } from "lucide-react";
 import PomodoroSettings from "./PomodoroSettings";
 
