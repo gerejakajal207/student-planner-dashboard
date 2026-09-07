@@ -407,29 +407,9 @@ def batch_add_tasks(
             except Exception:
                 parsed_date = datetime.now()
 
-        # Map category enum
-        cat = models.CategoryEnum.Class
-        if item.category:
-            for c in models.CategoryEnum:
-                if c.value.lower() == str(item.category).lower():
-                    cat = c
-                    break
-
-        # Map priority enum
-        prio = models.PriorityEnum.Medium
-        if item.priority:
-            for p in models.PriorityEnum:
-                if p.value.lower() == str(item.priority).lower():
-                    prio = p
-                    break
-
-        # Map effort enum
-        eff = models.EffortEnum.Medium
-        if item.effort:
-            for e in models.EffortEnum:
-                if e.value.lower() == str(item.effort).lower():
-                    eff = e
-                    break
+        cat = models.to_category_enum(item.category)
+        prio = models.to_priority_enum(item.priority)
+        eff = models.to_effort_enum(item.effort)
 
         task = models.Task(
             title=item.title,

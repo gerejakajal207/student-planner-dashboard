@@ -30,9 +30,9 @@ def create_task(
         title=data.title,
         description=data.description or "",
         subject=data.subject or "",
-        category=data.category,
-        priority=data.priority,
-        effort=data.effort,
+        category=models.to_category_enum(data.category),
+        priority=models.to_priority_enum(data.priority),
+        effort=models.to_effort_enum(data.effort),
         due_date=data.due_date,
         status=models.StatusEnum.Todo,
         owner_id=current_user.id
@@ -58,7 +58,7 @@ def update_task_status(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    task.status = data.status
+    task.status = models.to_status_enum(data.status)
     db.commit()
     db.refresh(task)
     return task
@@ -86,15 +86,15 @@ def update_task(
     if data.subject is not None:
         task.subject = data.subject
     if data.category is not None:
-        task.category = data.category
+        task.category = models.to_category_enum(data.category)
     if data.priority is not None:
-        task.priority = data.priority
+        task.priority = models.to_priority_enum(data.priority)
     if data.effort is not None:
-        task.effort = data.effort
+        task.effort = models.to_effort_enum(data.effort)
     if data.due_date is not None:
         task.due_date = data.due_date
     if data.status is not None:
-        task.status = data.status
+        task.status = models.to_status_enum(data.status)
 
     db.commit()
     db.refresh(task)

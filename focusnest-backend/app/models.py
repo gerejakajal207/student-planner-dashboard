@@ -26,6 +26,47 @@ class StatusEnum(str, enum.Enum):
     In_Progress = "In Progress"
     Done        = "Done"
 
+
+def to_category_enum(val):
+    if isinstance(val, CategoryEnum):
+        return val
+    val_str = str(val or "").strip().lower()
+    for c in CategoryEnum:
+        if c.value.lower() == val_str or c.name.lower() == val_str:
+            return c
+    return CategoryEnum.Class
+
+
+def to_priority_enum(val):
+    if isinstance(val, PriorityEnum):
+        return val
+    val_str = str(val or "").strip().lower()
+    for p in PriorityEnum:
+        if p.value.lower() == val_str or p.name.lower() == val_str:
+            return p
+    return PriorityEnum.Medium
+
+
+def to_effort_enum(val):
+    if isinstance(val, EffortEnum):
+        return val
+    val_str = str(val or "").strip().lower()
+    for e in EffortEnum:
+        if e.value.lower() == val_str or e.name.lower() == val_str:
+            return e
+    return EffortEnum.Medium
+
+
+def to_status_enum(val):
+    if isinstance(val, StatusEnum):
+        return val
+    val_str = str(val or "").strip().lower().replace("_", " ")
+    for s in StatusEnum:
+        if s.value.lower() == val_str or s.name.lower().replace("_", " ") == val_str:
+            return s
+    return StatusEnum.Todo
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -57,10 +98,10 @@ class Task(Base):
     title       = Column(String(200), nullable=False)
     description = Column(Text, default="")
     subject     = Column(String(100), default="")
-    category    = Column(Enum(CategoryEnum, native_enum=False), nullable=False, default=CategoryEnum.Class)
-    priority    = Column(Enum(PriorityEnum, native_enum=False), nullable=False, default=PriorityEnum.Medium)
-    effort      = Column(Enum(EffortEnum, native_enum=False), nullable=False, default=EffortEnum.Medium)
+    category    = Column(Enum(CategoryEnum, name="categoryenum", values_callable=lambda x: [e.value for e in x]), nullable=False, default=CategoryEnum.Class)
+    priority    = Column(Enum(PriorityEnum, name="priorityenum", values_callable=lambda x: [e.value for e in x]), nullable=False, default=PriorityEnum.Medium)
+    effort      = Column(Enum(EffortEnum, name="effortenum", values_callable=lambda x: [e.value for e in x]), nullable=False, default=EffortEnum.Medium)
     due_date    = Column(DateTime, nullable=False)
-    status      = Column(Enum(StatusEnum, native_enum=False), default=StatusEnum.Todo)
+    status      = Column(Enum(StatusEnum, name="statusenum", values_callable=lambda x: [e.value for e in x]), default=StatusEnum.Todo)
     owner_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
     owner       = relationship("User", back_populates="tasks")
