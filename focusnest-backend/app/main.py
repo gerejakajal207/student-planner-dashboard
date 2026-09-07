@@ -1,10 +1,7 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from .database import engine, Base
-from .routers import users, tasks, quotes, ai
+import os
+from dotenv import load_dotenv
 
-# Auto-create all tables in MySQL on startup
-Base.metadata.create_all(bind=engine)
+load_dotenv()
 
 app = FastAPI(
     title="FocusNest API",
@@ -12,37 +9,45 @@ app = FastAPI(
     version="1.0.0"
 )
 
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-# Build list of allowed CORS origins
+# Robustly parse and sanitize allowed CORS origins
 raw_origins = os.getenv("ALLOWED_ORIGINS", "")
+origins_set = {
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:3003",
+}
+
 if raw_origins:
-    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
-else:
-    origins = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:3003",
-    ]
+    for item in raw_origins.split(","):
+        cleaned = item.strip(" \"'\t\r\n").rstrip("/")
+        if cleaned:
+            origins_set.add(cleaned)
 
 frontend_url = os.getenv("FRONTEND_URL")
-if frontend_url and frontend_url not in origins:
-    origins.append(frontend_url.strip())
+if frontend_url:
+    cleaned_fe = frontend_url.strip(" \"'\t\r\n").rstrip("/")
+    if cleaned_fe:
+        origins_set.add(cleaned_fe)
 
-# Support wildcard configuration
-allow_all = "*" in origins or os.getenv("ALLOW_ALL_CORS", "false").lower() in ("1", "true", "yes")
-
-# CORS — allow React frontend
+# Allow credentials with exact origins or match any vercel/localhost origin
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if allow_all else origins,
-    allow_credentials=not allow_all,  # standard CORS specification requirement
+    allow_origins=list(origins_set),
+    allow_origin_regex=r"https://.*\.vercel\.app|http://localhost:\d+",
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+def on_startup():
+    # Auto-create all tables in DB on startup
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("Database tables initialized successfully.")
+    except Exception as e:
+        print(f"Warning: Could not create tables on startup: {e}")
+
 
 
 app.include_router(users.router)

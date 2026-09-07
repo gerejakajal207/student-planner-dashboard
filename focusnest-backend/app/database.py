@@ -13,6 +13,8 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_NAME     = os.getenv("DB_NAME", "focusnest")
 
 raw_db_url = os.getenv("DATABASE_URL")
+if raw_db_url:
+    raw_db_url = raw_db_url.strip(" \"'\t\r\n")
 
 if raw_db_url:
     # Standardize postgres:// prefix used by Render, Supabase, Railway, etc.
@@ -22,6 +24,7 @@ if raw_db_url:
         DATABASE_URL = raw_db_url
 else:
     DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
 
 # Configure engine arguments based on DB dialect
 engine_kwargs = {}
