@@ -423,6 +423,7 @@ def batch_add_tasks(
             owner_id=current_user.id,
         )
         db.add(task)
+        db.flush()
         created_tasks.append(task)
 
     db.commit()
