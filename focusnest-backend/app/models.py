@@ -95,9 +95,9 @@ class PasswordResetToken(Base):
 class Task(Base):
     __tablename__ = "tasks"
     id          = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    title       = Column(String(200), nullable=False)
+    title       = Column(Text, nullable=False)
     description = Column(Text, default="")
-    subject     = Column(String(100), default="")
+    subject     = Column(Text, default="")
     category    = Column(Enum(CategoryEnum, name="categoryenum", values_callable=lambda x: [e.value for e in x]), nullable=False, default=CategoryEnum.Class)
     priority    = Column(Enum(PriorityEnum, name="priorityenum", values_callable=lambda x: [e.value for e in x]), nullable=False, default=PriorityEnum.Medium)
     effort      = Column(Enum(EffortEnum, name="effortenum", values_callable=lambda x: [e.value for e in x]), nullable=False, default=EffortEnum.Medium)

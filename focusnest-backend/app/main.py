@@ -54,6 +54,8 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": f"Internal Server Error: {str(exc)}"},
     )
 
+from sqlalchemy import text
+
 @app.on_event("startup")
 def on_startup():
     # Auto-create all tables in DB on startup
@@ -62,6 +64,17 @@ def on_startup():
         print("Database tables initialized successfully.")
     except Exception as e:
         print(f"Warning: Could not create tables on startup: {e}")
+
+    # Migrate tasks columns to TEXT so long titles never fail with StringDataRightTruncation
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE tasks ALTER COLUMN title TYPE TEXT;"))
+            conn.execute(text("ALTER TABLE tasks ALTER COLUMN subject TYPE TEXT;"))
+            conn.commit()
+            print("Tasks table columns migrated to TEXT successfully.")
+    except Exception as e:
+        # Ignore if already text or database dialect does not require it
+        print(f"Column migration notice (normal if already TEXT): {e}")
 
 
 

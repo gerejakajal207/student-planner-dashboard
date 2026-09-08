@@ -109,7 +109,7 @@ class McqRequest(BaseModel):
 
 
 class BatchTaskItem(BaseModel):
-    title: str
+    title: Optional[str] = "Untitled Study Task"
     description: Optional[str] = ""
     subject: Optional[str] = ""
     category: Optional[str] = "Class"
@@ -394,43 +394,55 @@ def batch_add_tasks(
     current_user: models.User = Depends(auth.get_current_user)
 ):
     created_tasks = []
-    for item in req.tasks:
-        raw_date = item.due_date or item.date or ""
-        parsed_date = datetime.now()
-        if raw_date:
-            try:
-                date_str = str(raw_date).strip()
-                if "T" in date_str:
-                    parsed_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-                else:
-                    parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
-            except Exception:
-                parsed_date = datetime.now()
+    try:
+        for item in req.tasks:
+            raw_title = str(item.title or "").strip() or "Untitled Study Task"
+            raw_desc = str(item.description or "").strip()
+            raw_subj = str(item.subject or "").strip()
 
-        cat = models.to_category_enum(item.category)
-        prio = models.to_priority_enum(item.priority)
-        eff = models.to_effort_enum(item.effort)
+            raw_date = item.due_date or item.date or ""
+            parsed_date = datetime.now()
+            if raw_date:
+                try:
+                    date_str = str(raw_date).strip()
+                    if "T" in date_str:
+                        parsed_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                    elif " " in date_str and len(date_str) >= 19:
+                        parsed_date = datetime.strptime(date_str[:19], "%Y-%m-%d %H:%M:%S")
+                    else:
+                        parsed_date = datetime.strptime(date_str[:10], "%Y-%m-%d")
+                except Exception:
+                    parsed_date = datetime.now()
 
-        task = models.Task(
-            title=item.title,
-            description=item.description or "",
-            subject=item.subject or "",
-            category=cat,
-            priority=prio,
-            effort=eff,
-            due_date=parsed_date,
-            status=models.StatusEnum.Todo,
-            owner_id=current_user.id,
+            cat = models.to_category_enum(item.category)
+            prio = models.to_priority_enum(item.priority)
+            eff = models.to_effort_enum(item.effort)
+
+            task = models.Task(
+                title=raw_title,
+                description=raw_desc,
+                subject=raw_subj,
+                category=cat,
+                priority=prio,
+                effort=eff,
+                due_date=parsed_date,
+                status=models.StatusEnum.Todo,
+                owner_id=current_user.id,
+            )
+            db.add(task)
+            created_tasks.append(task)
+
+        db.commit()
+        for t in created_tasks:
+            db.refresh(t)
+
+        return {"message": f"Successfully created {len(created_tasks)} tasks", "count": len(created_tasks)}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to batch add tasks: {str(e)}"
         )
-        db.add(task)
-        db.flush()
-        created_tasks.append(task)
-
-    db.commit()
-    for t in created_tasks:
-        db.refresh(t)
-
-    return {"message": f"Successfully created {len(created_tasks)} tasks", "count": len(created_tasks)}
 
 
 # ── Request schema for topic validation ─────────────────────────────────────

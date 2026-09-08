@@ -279,16 +279,19 @@ export default function AiAssistantPage() {
     if (!scheduleResult || addingToSchedule || scheduleAdded) return;
     setAddingToSchedule(true);
 
-    const { daily_tasks, exam_task } = scheduleResult;
-    const allItems = [...daily_tasks, exam_task];
+    const daily = Array.isArray(daily_tasks) ? daily_tasks : [];
+    const allItems = [...daily];
+    if (exam_task && typeof exam_task === 'object' && (exam_task.title || exam_task.taskName)) {
+      allItems.push(exam_task);
+    }
 
     // Try batch endpoint first; if it fails fall back to individual addTask calls
     try {
       await api.aiBatchAddTasks(
-        allItems.map((t) => ({
-          title: t.title,
+        allItems.filter(Boolean).map((t) => ({
+          title: t.title || t.taskName || "Study Task",
           description: t.description || "",
-          subject: subject.trim(),
+          subject: (t.subject || subject || "").trim(),
           category: t.category || "Class",
           priority: t.priority || "Medium",
           effort: t.effort || "Medium",
