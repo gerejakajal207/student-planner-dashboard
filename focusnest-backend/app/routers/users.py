@@ -24,26 +24,36 @@ def _get_mail_config() -> ConnectionConfig:
     are always picked up without restarting the server.
     """
     load_dotenv(override=True)
+    mail_user = os.getenv("MAIL_USERNAME", "").strip()
+    mail_pass = os.getenv("MAIL_PASSWORD", "").strip()
+    mail_from = os.getenv("MAIL_FROM", "").strip() or mail_user or "noreply@focusnest.app"
+
     return ConnectionConfig(
-        MAIL_USERNAME   = os.getenv("MAIL_USERNAME", ""),
-        MAIL_PASSWORD   = os.getenv("MAIL_PASSWORD", ""),
-        MAIL_FROM       = os.getenv("MAIL_FROM", "noreply@focusnest.app"),
+        MAIL_USERNAME   = mail_user,
+        MAIL_PASSWORD   = mail_pass,
+        MAIL_FROM       = mail_from,
         MAIL_FROM_NAME  = os.getenv("MAIL_FROM_NAME", "FocusNest"),
         MAIL_SERVER     = os.getenv("MAIL_SERVER", "smtp.gmail.com"),
         MAIL_PORT       = int(os.getenv("MAIL_PORT", "587")),
         MAIL_STARTTLS   = os.getenv("MAIL_STARTTLS", "True") == "True",
         MAIL_SSL_TLS    = os.getenv("MAIL_SSL_TLS", "False") == "True",
-        USE_CREDENTIALS = True,
+        USE_CREDENTIALS = bool(mail_user and mail_pass),
         VALIDATE_CERTS  = True,
     )
 
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-
-
 async def _send_reset_email(email: str, name: str, token: str):
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    frontend_url = os.getenv("FRONTEND_URL", "https://student-planner-dashboard-lemon.vercel.app").rstrip("/")
     reset_link = f"{frontend_url}/reset-password?token={token}"
+
+    mail_user = os.getenv("MAIL_USERNAME", "").strip()
+    mail_pass = os.getenv("MAIL_PASSWORD", "").strip()
+
+    if not mail_user or not mail_pass:
+        print(f"[Email Service] ⚠️ Warning: MAIL_USERNAME or MAIL_PASSWORD is not configured on the backend server.")
+        print(f"[Email Service] Password Reset Link for {email}: {reset_link}")
+        return
+
     html_body = f"""
     <div style="font-family:sans-serif;max-width:520px;margin:auto;padding:32px 24px;background:#f8faff;border-radius:12px;">
       <div style="text-align:center;margin-bottom:24px;">
@@ -77,14 +87,18 @@ async def _send_reset_email(email: str, name: str, token: str):
       </p>
     </div>
     """
-    message = MessageSchema(
-        subject="Reset your FocusNest password",
-        recipients=[email],
-        body=html_body,
-        subtype=MessageType.html,
-    )
-    fm = FastMail(_get_mail_config())
-    await fm.send_message(message)
+    try:
+        message = MessageSchema(
+            subject="Reset your FocusNest password",
+            recipients=[email],
+            body=html_body,
+            subtype=MessageType.html,
+        )
+        fm = FastMail(_get_mail_config())
+        await fm.send_message(message)
+        print(f"[Email Service] ✅ Successfully sent password reset email to {email}")
+    except Exception as e:
+        print(f"[Email Service] ❌ Failed to send password reset email to {email}: {e}")
 
 
 # ── Auth endpoints ────────────────────────────────────────────────────────────
