@@ -1,91 +1,32 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState } from "react";
 import { Settings, Play, Pause, RotateCcw, SkipForward, Flame } from "lucide-react";
 import PomodoroSettings from "./PomodoroSettings";
-
-// Gentle audio alert chime using Web Audio API
-function playAlertChime() {
-  try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-
-    const now = ctx.currentTime;
-    // Chime note 1: E5
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = "sine";
-    osc1.frequency.setValueAtTime(659.25, now);
-    gain1.gain.setValueAtTime(0.2, now);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.6);
-
-    // Chime note 2: G#5
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = "sine";
-    osc2.frequency.setValueAtTime(830.61, now + 0.2);
-    gain2.gain.setValueAtTime(0.25, now + 0.2);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(now + 0.2);
-    osc2.stop(now + 0.8);
-
-    // Chime note 3: B5
-    const osc3 = ctx.createOscillator();
-    const gain3 = ctx.createGain();
-    osc3.type = "sine";
-    osc3.frequency.setValueAtTime(987.77, now + 0.4);
-    gain3.gain.setValueAtTime(0.3, now + 0.4);
-    gain3.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-    osc3.connect(gain3);
-    gain3.connect(ctx.destination);
-    osc3.start(now + 0.4);
-    osc3.stop(now + 1.2);
-  } catch (e) {
-    console.error("Audio chime error:", e);
-  }
-}
+import { useTimer } from "./TimerContext";
 
 export default function Pomodoro() {
   const [showSettings, setShowSettings] = useState(false);
-  const [mode, setMode] = useState("focus"); // "focus" | "shortBreak" | "longBreak"
-  const [focusTime, setFocusTime] = useState(25);
-  const [shortBreak, setShortBreak] = useState(5);
-  const [longBreak, setLongBreak] = useState(20);
-  const [interval, setInterval] = useState(4);
-  const [completedSessions, setCompletedSessions] = useState(0);
 
-  const getDurationForMode = useCallback(
-    (m) => {
-      if (m === "focus") return focusTime * 60;
-      if (m === "shortBreak") return shortBreak * 60;
-      return longBreak * 60;
-    },
-    [focusTime, shortBreak, longBreak]
-  );
-
-  const [timeLeft, setTimeLeft] = useState(focusTime * 60);
-  const [isRunning, setIsRunning] = useState(false);
-
-  const startTimeRef = useRef(null);
-  const elapsedRef = useRef(0);
-  const requestRef = useRef(null);
-
-  // Update timer whenever durations or mode change while idle
-  useEffect(() => {
-    if (!isRunning) {
-      setTimeLeft(getDurationForMode(mode));
-      elapsedRef.current = 0;
-    }
-  }, [getDurationForMode, isRunning, mode]);
-
-  const total = getDurationForMode(mode);
-  const elapsed = total - timeLeft;
-  const progress = total > 0 ? elapsed / total : 0;
+  const {
+    mode,
+    timeLeft,
+    isRunning,
+    focusTime,
+    shortBreak,
+    longBreak,
+    interval,
+    completedSessions,
+    totalDuration,
+    progress,
+    setFocusTime,
+    setShortBreak,
+    setLongBreak,
+    setInterval,
+    toggleTimer,
+    resetTimer,
+    skipToNext,
+    switchMode,
+    formatTime,
+  } = useTimer();
 
   // SVG circle config
   const SIZE = 180;
@@ -93,92 +34,6 @@ export default function Pomodoro() {
   const RADIUS = (SIZE - STROKE) / 2;
   const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
   const dashOffset = CIRCUMFERENCE * (1 - progress);
-
-  const handleSessionComplete = () => {
-    playAlertChime();
-    setIsRunning(false);
-    cancelAnimationFrame(requestRef.current);
-    elapsedRef.current = 0;
-
-    if (mode === "focus") {
-      const nextSessionCount = completedSessions + 1;
-      setCompletedSessions(nextSessionCount);
-      if (nextSessionCount % interval === 0) {
-        setMode("longBreak");
-        setTimeLeft(longBreak * 60);
-      } else {
-        setMode("shortBreak");
-        setTimeLeft(shortBreak * 60);
-      }
-    } else {
-      // Break is complete, go back to focus
-      setMode("focus");
-      setTimeLeft(focusTime * 60);
-    }
-  };
-
-  const tick = () => {
-    const now = Date.now();
-    const currentModeTotal = getDurationForMode(mode);
-    const elapsedSecs = Math.floor((now - startTimeRef.current) / 1000) + elapsedRef.current;
-    const newTimeLeft = Math.max(currentModeTotal - elapsedSecs, 0);
-
-    setTimeLeft(newTimeLeft);
-
-    if (newTimeLeft > 0) {
-      requestRef.current = requestAnimationFrame(tick);
-    } else {
-      handleSessionComplete();
-    }
-  };
-
-  const startTimer = () => {
-    if (!isRunning) {
-      setIsRunning(true);
-      startTimeRef.current = Date.now();
-      requestRef.current = requestAnimationFrame(tick);
-    }
-  };
-
-  const pauseTimer = () => {
-    setIsRunning(false);
-    elapsedRef.current = getDurationForMode(mode) - timeLeft;
-    cancelAnimationFrame(requestRef.current);
-  };
-
-  const toggleTimer = () => (isRunning ? pauseTimer() : startTimer());
-
-  const resetTimer = () => {
-    setIsRunning(false);
-    cancelAnimationFrame(requestRef.current);
-    setTimeLeft(getDurationForMode(mode));
-    elapsedRef.current = 0;
-  };
-
-  const skipToNext = () => {
-    pauseTimer();
-    if (mode === "focus") {
-      setMode("shortBreak");
-      setTimeLeft(shortBreak * 60);
-    } else {
-      setMode("focus");
-      setTimeLeft(focusTime * 60);
-    }
-    elapsedRef.current = 0;
-  };
-
-  const switchMode = (newMode) => {
-    pauseTimer();
-    setMode(newMode);
-    setTimeLeft(getDurationForMode(newMode));
-    elapsedRef.current = 0;
-  };
-
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  };
 
   const getModeColor = () => {
     if (mode === "focus") return "#6366f1"; // indigo
@@ -280,7 +135,7 @@ export default function Pomodoro() {
             <span className="mt-0.5 text-xs font-semibold capitalize text-slate-400 dark:text-[#64748b]">
               {isRunning
                 ? mode === "focus" ? "In Focus" : "Resting"
-                : timeLeft === total ? "Ready" : "Paused"}
+                : timeLeft === totalDuration ? "Ready" : "Paused"}
             </span>
           </div>
         </div>

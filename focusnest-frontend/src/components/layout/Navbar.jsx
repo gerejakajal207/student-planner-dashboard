@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { NavLink, Link } from "react-router-dom";
-import { Menu, Moon, Sun, X, Sparkles } from "lucide-react";
+import { Menu, Moon, Sun, X, Sparkles, Play, Pause } from "lucide-react";
 import DrawerContent from "./DrawerContent";
+import { useTimer } from "../TimerContext";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [dark, setDark] = useState(false);
+  const { isRunning, timeLeft, totalDuration, mode, formatTime, toggleTimer } = useTimer();
 
   useEffect(() => {
     const isDark = document.documentElement.classList.contains("dark") || localStorage.getItem("theme") === "dark";
@@ -76,7 +78,27 @@ export default function Navbar() {
         </div>
 
         {/* RIGHT SIDE */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Mini Pomodoro Widget */}
+          {(isRunning || timeLeft < totalDuration) && (
+            <div className="flex items-center gap-1.5 rounded-full bg-white/20 dark:bg-white/10 backdrop-blur-md px-2.5 py-1 border border-white/20 shadow-sm text-white text-xs font-semibold animate-fadeIn">
+              <Link to="/todays-page" className="flex items-center gap-1.5 hover:text-amber-300 transition-colors" title="Open Today's Mode & Pomodoro">
+                <span className={`w-2 h-2 rounded-full ${isRunning ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
+                <span className="tabular-nums font-bold tracking-tight">{formatTime(timeLeft)}</span>
+                <span className="hidden sm:inline text-[10px] uppercase font-bold text-white/80">
+                  {mode === "focus" ? "Focus" : "Break"}
+                </span>
+              </Link>
+              <button
+                onClick={toggleTimer}
+                className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white transition-all ml-0.5"
+                title={isRunning ? "Pause Timer" : "Resume Timer"}
+              >
+                {isRunning ? <Pause size={10} /> : <Play size={10} className="translate-x-[0.5px]" />}
+              </button>
+            </div>
+          )}
+
           <button
             onClick={toggleTheme}
             aria-label="Toggle Theme"

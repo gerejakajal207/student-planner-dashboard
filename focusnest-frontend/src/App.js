@@ -4,6 +4,7 @@ import "./App.css";
 
 import { TaskProvider } from "./components/TaskContext";
 import { AuthProvider, useAuth } from "./components/AuthContext";
+import { TimerProvider } from "./components/TimerContext";
 import Navbar from "./components/layout/Navbar";  
 import TodaysPage from "./pages/TodaysMode";
 import AboutUsPage from "./pages/AboutUsPage";
@@ -82,9 +83,11 @@ function App() {
   return (
     <AuthProvider>
       <TaskProvider>
-        <Router>
-          <AppLayout />
-        </Router>
+        <TimerProvider>
+          <Router>
+            <AppLayout />
+          </Router>
+        </TimerProvider>
       </TaskProvider>
     </AuthProvider>
   );

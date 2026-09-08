@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Plus, TriangleAlert, Flame, BookOpen, CheckCircle2, Circle, Edit2, Trash2 } from "lucide-react";
+import { Plus, Flame, BookOpen, CheckCircle2, Circle, Edit2, Trash2, Zap, Clock, Filter } from "lucide-react";
 import Pomodoro from "../components/Pomodoro";
 import QuoteCard from "../components/QuoteCard";
 import ProgressCard from "../components/todays-mode/ProgressCard";
 import TaskModal from "../components/TaskModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { useTasks } from "../components/TaskContext";
+import { useTimer } from "../components/TimerContext";
 
 function isToday(date) {
   if (!date) return false;
@@ -31,7 +32,7 @@ const PRIORITY_STYLES = {
   Low:    { text: "text-slate-400", bg: "bg-slate-100 dark:bg-[#1e2530]",   dot: "bg-slate-400" },
 };
 
-function TaskRow({ task, isDeprioritized, onEdit, onToggleStatus, onDelete }) {
+function TaskRow({ task, onEdit, onToggleStatus, onDelete }) {
   const cat = CATEGORY_COLORS[task.category] ?? { bar: "bg-slate-400", badge: "bg-slate-100 dark:bg-[#1e2530] text-slate-500" };
   const pri = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.Medium;
   const isDone = task.status === "Done";
@@ -40,7 +41,6 @@ function TaskRow({ task, isDeprioritized, onEdit, onToggleStatus, onDelete }) {
     <div
       className={`group flex items-center gap-3 sm:gap-4 rounded-2xl border bg-white dark:bg-[#161b22] px-4 py-3.5 shadow-sm transition-all duration-150
         ${isDone ? "border-emerald-200/80 dark:border-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-500/[0.04] opacity-75" : "border-slate-100 dark:border-white/[0.07] hover:border-indigo-200 dark:hover:border-indigo-500/40 hover:shadow-md"}
-        ${isDeprioritized && !isDone ? "opacity-50" : ""}
       `}
     >
       {/* Checkbox toggle */}
@@ -103,24 +103,46 @@ function TaskRow({ task, isDeprioritized, onEdit, onToggleStatus, onDelete }) {
 
 export default function TodaysPage() {
   const { tasks, addTask, editTask, updateTaskStatus, deleteTask } = useTasks();
+  const { isRunning, startTimer, pauseTimer } = useTimer();
+
   const [openTaskModal, setOpenTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [filterMode, setFilterMode] = useState("all"); // "all" | "high" | "pending"
 
   const todayTasks = tasks.filter((t) => isToday(t.date));
+
+  // Smart Workload Metrics
+  const highPriorityCount = todayTasks.filter((t) => t.priority === "High").length;
   const highEffortCount = todayTasks.filter((t) => t.effort === "High").length;
-  const isHeavyDay = highEffortCount >= 3;
+  const estimatedHours = todayTasks.reduce((acc, t) => {
+    if (t.effort === "High") return acc + 2.0;
+    if (t.effort === "Low") return acc + 0.5;
+    return acc + 1.0;
+  }, 0);
+
+  const isHeavyDay = todayTasks.length >= 5 || estimatedHours >= 5 || highEffortCount >= 2;
+  const isModerateDay = !isHeavyDay && (todayTasks.length >= 3 || estimatedHours >= 2.5);
+
   const doneTasks = todayTasks.filter((t) => t.status === "Done");
+  const pendingTasks = todayTasks.filter((t) => t.status !== "Done");
   const completionPct = todayTasks.length > 0
     ? Math.round((doneTasks.length / todayTasks.length) * 100)
     : 0;
 
-  const sortedTasks = [...todayTasks].sort((a, b) => {
-    if (a.status === "Done" && b.status !== "Done") return 1;
-    if (a.status !== "Done" && b.status === "Done") return -1;
-    const order = { High: 0, Medium: 1, Low: 2 };
-    return (order[a.priority] ?? 1) - (order[b.priority] ?? 1);
-  });
+  // Filter tasks based on student view
+  const displayedTasks = todayTasks
+    .filter((t) => {
+      if (filterMode === "high") return t.priority === "High";
+      if (filterMode === "pending") return t.status !== "Done";
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.status === "Done" && b.status !== "Done") return 1;
+      if (a.status !== "Done" && b.status === "Done") return -1;
+      const order = { High: 0, Medium: 1, Low: 2 };
+      return (order[a.priority] ?? 1) - (order[b.priority] ?? 1);
+    });
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0d1117] p-4 sm:p-6 md:p-8 transition-colors">
@@ -157,32 +179,120 @@ export default function TodaysPage() {
           </div>
         </div>
 
-        {/* ── HEAVY DAY BANNER ── */}
+        {/* ── SMART WORKLOAD ADVISOR (Option A) ── */}
         {isHeavyDay && (
-          <div className="mt-6 flex items-start gap-4 rounded-3xl border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/[0.08] px-6 py-4 shadow-sm">
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-amber-100 dark:bg-amber-500/[0.15]">
-              <TriangleAlert className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+          <div className="mt-6 rounded-3xl border border-amber-200/80 dark:border-amber-500/20 bg-gradient-to-r from-amber-50/90 via-orange-50/40 to-amber-50/90 dark:from-amber-500/[0.08] dark:via-[#161b22] dark:to-amber-500/[0.04] p-5 sm:p-6 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                  <Flame className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold text-amber-900 dark:text-amber-300">
+                      Heavy Workload Detected
+                    </h3>
+                    <span className="rounded-full bg-amber-200/60 dark:bg-amber-500/20 px-2 py-0.5 text-[10px] font-extrabold text-amber-800 dark:text-amber-300">
+                      {todayTasks.length} Tasks · ~{estimatedHours}h Est.
+                    </span>
+                    {highPriorityCount > 0 && (
+                      <span className="rounded-full bg-rose-100 dark:bg-rose-500/20 px-2 py-0.5 text-[10px] font-extrabold text-rose-700 dark:text-rose-400">
+                        {highPriorityCount} High Priority
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-300/80 leading-relaxed">
+                    You have a full schedule today. Tackle high-priority items first and take structured Pomodoro breaks to maintain peak energy.
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 self-end md:self-center flex-shrink-0">
+                <button
+                  onClick={() => setFilterMode(filterMode === "high" ? "all" : "high")}
+                  className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all ${
+                    filterMode === "high"
+                      ? "bg-amber-600 text-white shadow-sm"
+                      : "bg-white dark:bg-[#1e2530] text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-500/20 hover:bg-amber-100 dark:hover:bg-amber-500/20"
+                  }`}
+                >
+                  <Filter size={13} /> {filterMode === "high" ? "Showing High Priority" : "Focus on High Priority"}
+                </button>
+                <button
+                  onClick={() => (isRunning ? pauseTimer() : startTimer())}
+                  className="flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-all active:scale-95"
+                >
+                  <Zap size={13} /> {isRunning ? "Pause Focus Timer" : "Start Focus Timer"}
+                </button>
+              </div>
             </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-bold text-amber-800 dark:text-amber-400">Heavy Day Detected</h3>
-              <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
-                You have {highEffortCount} high-effort tasks today. Low priority tasks are softened so you can focus on core priorities without burning out.
+          </div>
+        )}
+
+        {/* ── MODERATE WORKLOAD ADVICE ── */}
+        {!isHeavyDay && isModerateDay && (
+          <div className="mt-6 flex items-center justify-between rounded-2xl border border-indigo-100 dark:border-indigo-500/20 bg-indigo-50/40 dark:bg-indigo-500/[0.04] px-5 py-3.5">
+            <div className="flex items-center gap-2.5">
+              <Clock className="h-4 w-4 text-indigo-500 flex-shrink-0" />
+              <p className="text-xs text-slate-700 dark:text-[#cbd5e1]">
+                <strong className="font-semibold text-indigo-600 dark:text-indigo-400">Steady Pace:</strong> You have {todayTasks.length} tasks today (~{estimatedHours}h total). Ready to start your first focus block?
               </p>
             </div>
-            <Flame className="h-5 w-5 text-amber-500 flex-shrink-0 mt-1" />
+            <button
+              onClick={() => (isRunning ? pauseTimer() : startTimer())}
+              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex-shrink-0 ml-2"
+            >
+              {isRunning ? "Pause Timer" : "Start Focus"}
+            </button>
           </div>
         )}
 
         {/* ── TODAY'S SCHEDULE ── */}
         <div className="mt-6 rounded-3xl bg-white dark:bg-[#161b22] border border-slate-100 dark:border-white/[0.07] shadow-sm p-6 sm:p-7">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-base font-bold text-slate-800 dark:text-white">Today's Schedule</h2>
-              <p className="text-xs text-slate-400 dark:text-[#64748b] mt-0.5">Sorted by priority · click to edit or check off</p>
+              <p className="text-xs text-slate-400 dark:text-[#64748b] mt-0.5">
+                Sorted by priority · click to edit or check off
+              </p>
             </div>
-            <span className="rounded-full bg-indigo-50 dark:bg-indigo-500/[0.15] px-3 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400">
-              {todayTasks.length} task{todayTasks.length !== 1 ? "s" : ""}
-            </span>
+
+            {/* Quick Filter tabs */}
+            {todayTasks.length > 0 && (
+              <div className="flex items-center gap-1 rounded-xl bg-slate-100 dark:bg-[#1e2530] p-1 self-start sm:self-auto">
+                <button
+                  onClick={() => setFilterMode("all")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                    filterMode === "all"
+                      ? "bg-white dark:bg-[#252d3a] text-indigo-600 dark:text-indigo-400 shadow-sm"
+                      : "text-slate-500 dark:text-[#94a3b8] hover:text-slate-800 dark:hover:text-slate-200"
+                  }`}
+                >
+                  All ({todayTasks.length})
+                </button>
+                <button
+                  onClick={() => setFilterMode("pending")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                    filterMode === "pending"
+                      ? "bg-white dark:bg-[#252d3a] text-indigo-600 dark:text-indigo-400 shadow-sm"
+                      : "text-slate-500 dark:text-[#94a3b8] hover:text-slate-800 dark:hover:text-slate-200"
+                  }`}
+                >
+                  To-Do ({pendingTasks.length})
+                </button>
+                <button
+                  onClick={() => setFilterMode("high")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                    filterMode === "high"
+                      ? "bg-white dark:bg-[#252d3a] text-rose-600 dark:text-rose-400 shadow-sm"
+                      : "text-slate-500 dark:text-[#94a3b8] hover:text-slate-800 dark:hover:text-slate-200"
+                  }`}
+                >
+                  High ({highPriorityCount})
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Progress bar — only shown when there are tasks */}
@@ -204,21 +314,28 @@ export default function TodaysPage() {
           )}
 
           {/* Task list */}
-          {todayTasks.length === 0 ? (
+          {displayedTasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-14 text-center">
-              <div className="text-5xl mb-3">🎉</div>
-              <p className="text-sm font-semibold text-slate-700 dark:text-[#e2e8f0]">No tasks for today!</p>
+              <div className="text-5xl mb-3">
+                {todayTasks.length === 0 ? "🎉" : "✨"}
+              </div>
+              <p className="text-sm font-semibold text-slate-700 dark:text-[#e2e8f0]">
+                {todayTasks.length === 0
+                  ? "No tasks scheduled for today!"
+                  : "No tasks matching this filter."}
+              </p>
               <p className="text-xs text-slate-400 dark:text-[#64748b] mt-1">
-                Tap "Add Task" to organize your study schedule.
+                {todayTasks.length === 0
+                  ? "Tap 'Add Task' to organize your study schedule."
+                  : "Switch to 'All' to view your full daily agenda."}
               </p>
             </div>
           ) : (
             <div className="flex flex-col gap-2.5">
-              {sortedTasks.map((task) => (
+              {displayedTasks.map((task) => (
                 <TaskRow
                   key={task.id}
                   task={task}
-                  isDeprioritized={isHeavyDay && task.priority === "Low"}
                   onEdit={() => {
                     setEditingTask(task);
                     setOpenTaskModal(true);
