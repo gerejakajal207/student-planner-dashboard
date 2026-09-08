@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -13,23 +14,25 @@ import {
   BookOpen,
   Clock,
   AlertCircle,
+  ArrowRight,
 } from "lucide-react";
 import { useTasks } from "../components/TaskContext";
 import { api } from "../api";
 
 // ── Toast Component ──────────────────────────────────────────────────────────
-function Toast({ message, type = "success", onClose }) {
+function Toast({ message, type = "success", action, onClose }) {
   useEffect(() => {
-    const t = setTimeout(onClose, 3500);
+    const duration = action ? 6000 : 3500;
+    const t = setTimeout(onClose, duration);
     return () => clearTimeout(t);
-  }, [onClose]);
+  }, [onClose, action]);
 
   const colors =
     type === "success"
-      ? "bg-emerald-500 text-white"
+      ? "bg-emerald-600 dark:bg-emerald-600 text-white"
       : type === "error"
       ? "bg-red-500 text-white"
-      : "bg-indigo-500 text-white";
+      : "bg-indigo-600 text-white";
 
   const Icon = type === "success" ? CheckCircle2 : type === "error" ? AlertCircle : Sparkles;
 
@@ -38,11 +41,22 @@ function Toast({ message, type = "success", onClose }) {
       className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-3.5 shadow-2xl text-sm font-semibold animate-fade-in-up ${colors}`}
       style={{ animation: "fadeInUp 0.3s ease-out" }}
     >
-      <Icon size={18} />
+      <Icon size={18} className="flex-shrink-0" />
       <span>{message}</span>
+      {action && (
+        <Link
+          to={action.to}
+          onClick={onClose}
+          className="ml-2 inline-flex items-center gap-1.5 rounded-xl bg-white/20 hover:bg-white/30 px-3 py-1.5 text-xs font-bold text-white transition-all shadow-xs border border-white/25 active:scale-95"
+        >
+          <span>{action.label}</span>
+          <ArrowRight size={13} />
+        </Link>
+      )}
       <button
         onClick={onClose}
-        className="ml-2 opacity-75 hover:opacity-100 transition-opacity text-lg leading-none"
+        className="ml-1 opacity-75 hover:opacity-100 transition-opacity text-lg leading-none"
+        aria-label="Close"
       >
         ×
       </button>
@@ -142,8 +156,8 @@ export default function AiAssistantPage() {
   const [copied, setCopied] = useState(false);
 
   // Toast state
-  const [toast, setToast] = useState(null); // { message, type }
-  const showToast = (message, type = "success") => setToast({ message, type });
+  const [toast, setToast] = useState(null); // { message, type, action }
+  const showToast = (message, type = "success", action = null) => setToast({ message, type, action });
 
   // ── Validation state (shared across tabs) ──
   const [validating, setValidating] = useState(false);
@@ -334,7 +348,10 @@ export default function AiAssistantPage() {
 
     setAddingToSchedule(false);
     setScheduleAdded(true);
-    showToast(`${allItems.length} tasks added to your schedule!`, "success");
+    showToast(`${allItems.length} tasks added to your schedule!`, "success", {
+      to: "/board",
+      label: "View in Kanban",
+    });
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -345,6 +362,7 @@ export default function AiAssistantPage() {
         <Toast
           message={toast.message}
           type={toast.type}
+          action={toast.action}
           onClose={() => setToast(null)}
         />
       )}

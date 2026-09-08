@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useDrag, useDrop, DndProvider } from "react-dnd";
 import { HTML5toTouch } from "rdndmb-html5-to-touch";
 import { MultiBackend } from "react-dnd-multi-backend";
-import { GripVertical, Plus, TriangleAlert, Trash2, Edit2 } from "lucide-react";
+import { GripVertical, Plus, Trash2, Edit2 } from "lucide-react";
 import { useTasks } from "../components/TaskContext";
 import TaskModal from "../components/TaskModal";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -37,7 +37,7 @@ const EFFORT_STYLES = {
 };
 
 // ---------- Task Card ----------
-function DraggableTaskCard({ task, isDeprioritized, columnColor, onEdit, onDeleteRequest }) {
+function DraggableTaskCard({ task, columnColor, onEdit, onDeleteRequest }) {
   const [{ isDragging }, drag] = useDrag({
     type: ItemType,
     item: { id: task.id },
@@ -57,7 +57,7 @@ function DraggableTaskCard({ task, isDeprioritized, columnColor, onEdit, onDelet
       ref={drag}
       className={`group relative mb-2.5 cursor-grab transition-all duration-150 active:cursor-grabbing ${
         isDragging ? "rotate-1 scale-95 opacity-30" : "opacity-100"
-      } ${isDeprioritized ? "opacity-40" : ""} `}
+      }`}
     >
       <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#1e2530] shadow-sm transition-all duration-150 hover:border-slate-300 dark:hover:border-white/[0.14] hover:shadow-md dark:shadow-black/20">
         {/* Accent Bar */}
@@ -69,11 +69,7 @@ function DraggableTaskCard({ task, isDeprioritized, columnColor, onEdit, onDelet
             <div className="flex min-w-0 flex-1 items-start gap-2">
               <GripVertical className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-300 dark:text-[#475569]" />
               <div className="min-w-0 flex-1">
-                <h4
-                  className={`text-sm font-semibold leading-snug text-slate-800 dark:text-white ${
-                    isDeprioritized ? "text-slate-400 line-through" : ""
-                  }`}
-                >
+                <h4 className="text-sm font-semibold leading-snug text-slate-800 dark:text-white">
                   {task.title}
                 </h4>
                 {task.description && (
@@ -148,7 +144,7 @@ function DraggableTaskCard({ task, isDeprioritized, columnColor, onEdit, onDelet
 }
 
 // ---------- Column ----------
-function Column({ status, title, color, tasks, onDrop, isHeavyDay, onEdit, onDeleteRequest }) {
+function Column({ status, title, color, tasks, onDrop, onEdit, onDeleteRequest }) {
   const [{ isOver }, drop] = useDrop({
     accept: ItemType,
     drop: (item) => onDrop(item.id, status),
@@ -194,7 +190,6 @@ function Column({ status, title, color, tasks, onDrop, isHeavyDay, onEdit, onDel
               key={task.id}
               task={task}
               columnColor={color}
-              isDeprioritized={isHeavyDay && task.priority === "Low"}
               onEdit={onEdit}
               onDeleteRequest={onDeleteRequest}
             />
@@ -211,9 +206,6 @@ export default function KanbanPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // task id to delete
-
-  const highEffortCount = tasks.filter((t) => t.status === "Todo" && t.effort === "High").length;
-  const isHeavyDay = highEffortCount > 3;
 
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter((t) => t.status === "Done").length;
@@ -263,14 +255,6 @@ export default function KanbanPage() {
                 <span className="text-xs font-bold text-slate-600 dark:text-[#94a3b8]">{progress}%</span>
               </div>
             )}
-
-            {/* Heavy day banner */}
-            {isHeavyDay && (
-              <div className="flex w-fit items-center gap-2.5 rounded-2xl border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/[0.08] px-4 py-2.5 text-xs sm:text-sm text-amber-800 dark:text-amber-400">
-                <TriangleAlert className="h-4 w-4 flex-shrink-0" />
-                <span>Heavy day detected — low priority tasks are visually deprioritized</span>
-              </div>
-            )}
           </div>
 
           {/* DESKTOP columns */}
@@ -284,11 +268,9 @@ export default function KanbanPage() {
                   color={col.color}
                   tasks={tasks.filter((t) => t.status === col.status)}
                   onDrop={(id, status) => updateTaskStatus(id, status)}
-                  isHeavyDay={isHeavyDay}
                   onEdit={handleEdit}
                   onDeleteRequest={(id) => setConfirmDelete(id)}
                 />
-
               ))}
             </div>
           </div>
