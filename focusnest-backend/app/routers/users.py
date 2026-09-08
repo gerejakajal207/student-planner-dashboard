@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas, auth
 from app.database import get_db
 
+import httpx
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -20,7 +21,7 @@ router = APIRouter(tags=["Auth & Users"])
 RESET_TOKEN_EXPIRE_MINUTES = 15
 
 
-def _build_email_message(to_email: str, name: str, reset_link: str, mail_from: str, mail_from_name: str) -> MIMEMultipart:
+def _get_email_content(name: str, reset_link: str):
     text_body = f"""Hi {name},
 
 We received a request to reset your FocusNest password.
@@ -65,51 +66,94 @@ FocusNest • Student Productivity Platform"""
       </p>
     </div>
     """
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Reset your FocusNest password"
-    msg["From"] = f"{mail_from_name} <{mail_from}>"
-    msg["To"] = to_email
-    msg.attach(MIMEText(text_body, "plain", "utf-8"))
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-    return msg
+    return text_body, html_body
 
 
-def _get_smtp_config():
-    load_dotenv(override=True)
-    mail_user = os.getenv("MAIL_USERNAME", "").strip().strip("\"'")
-    mail_pass = os.getenv("MAIL_PASSWORD", "").strip().strip("\"'")
-    mail_from = (os.getenv("MAIL_FROM") or mail_user).strip().strip("\"'")
-    mail_from_name = os.getenv("MAIL_FROM_NAME", "FocusNest").strip().strip("\"'")
-    mail_server = os.getenv("MAIL_SERVER", "smtp.gmail.com").strip().strip("\"'")
+def _send_via_brevo(api_key: str, mail_from: str, mail_from_name: str, to_email: str, name: str, subject: str, html_content: str, text_content: str) -> bool:
+    """Send transactional email via Brevo HTTP API (Port 443 HTTPS - Works on Render Free Tier)."""
     try:
-        mail_port = int(os.getenv("MAIL_PORT", "465"))
-    except ValueError:
-        mail_port = 465
-    return mail_user, mail_pass, mail_from, mail_from_name, mail_server, mail_port
+        print(f"[Email Service] Sending via Brevo API (HTTPS port 443) to {to_email}...")
+        url = "https://api.brevo.com/v3/smtp/email"
+        headers = {
+            "accept": "application/json",
+            "api-key": api_key,
+            "content-type": "application/json"
+        }
+        payload = {
+            "sender": {"name": mail_from_name, "email": mail_from},
+            "to": [{"email": to_email, "name": name or to_email}],
+            "subject": subject,
+            "htmlContent": html_content,
+            "textContent": text_content
+        }
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.post(url, headers=headers, json=payload)
+            if resp.status_code in (200, 201):
+                print(f"[Email Service] ✅ Successfully sent via Brevo HTTP API to {to_email}")
+                return True
+            else:
+                print(f"[Email Service] ❌ Brevo API returned {resp.status_code}: {resp.text}")
+                return False
+    except Exception as e:
+        print(f"[Email Service] ❌ Brevo HTTP error: {e}")
+        return False
+
+
+def _send_via_resend(api_key: str, mail_from: str, mail_from_name: str, to_email: str, subject: str, html_content: str, text_content: str) -> bool:
+    """Send transactional email via Resend HTTP API (Port 443 HTTPS - Works on Render Free Tier)."""
+    try:
+        print(f"[Email Service] Sending via Resend API (HTTPS port 443) to {to_email}...")
+        url = "https://api.resend.com/emails"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        sender_email = mail_from if ("@" in mail_from and not mail_from.endswith("@gmail.com")) else "onboarding@resend.dev"
+        payload = {
+            "from": f"{mail_from_name} <{sender_email}>",
+            "to": [to_email],
+            "subject": subject,
+            "html": html_content,
+            "text": text_content
+        }
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.post(url, headers=headers, json=payload)
+            if resp.status_code in (200, 201):
+                print(f"[Email Service] ✅ Successfully sent via Resend HTTP API to {to_email}")
+                return True
+            else:
+                print(f"[Email Service] ❌ Resend API returned {resp.status_code}: {resp.text}")
+                return False
+    except Exception as e:
+        print(f"[Email Service] ❌ Resend HTTP error: {e}")
+        return False
 
 
 def _send_via_smtp(mail_server: str, mail_port: int, mail_user: str, mail_pass: str,
-                   mail_from: str, to_email: str, msg: MIMEMultipart):
-    """Try SSL first (port 465), then fall back to STARTTLS (port 587)."""
-    errors = []
+                   mail_from: str, to_email: str, subject: str, text_body: str, html_body: str) -> bool:
+    """Fallback to direct SMTP (Note: Render Free Tier blocks outbound SMTP ports 25, 465, 587)."""
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"FocusNest <{mail_from}>"
+    msg["To"] = to_email
+    msg.attach(MIMEText(text_body, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-    # Attempt 1: SMTP_SSL on port 465
+    # Attempt 1: Port 465 (SSL)
     try:
         print(f"[Email Service] Trying SMTP_SSL on {mail_server}:465...")
-        with smtplib.SMTP_SSL(mail_server, 465, timeout=20) as server:
+        with smtplib.SMTP_SSL(mail_server, 465, timeout=5) as server:
             server.login(mail_user, mail_pass)
             server.sendmail(mail_from, [to_email], msg.as_string())
         print(f"[Email Service] ✅ Sent via SSL:465 to {to_email}")
         return True
     except Exception as e:
-        errors.append(f"SSL:465 → {e}")
-        print(f"[Email Service] ⚠️ SSL:465 failed: {e}")
+        print(f"[Email Service] ⚠️ SSL:465 failed (likely Render port block): {e}")
 
-    # Attempt 2: STARTTLS on port 587
+    # Attempt 2: Port 587 (STARTTLS)
     try:
         print(f"[Email Service] Trying STARTTLS on {mail_server}:587...")
-        with smtplib.SMTP(mail_server, 587, timeout=20) as server:
+        with smtplib.SMTP(mail_server, 587, timeout=5) as server:
             server.ehlo()
             server.starttls()
             server.ehlo()
@@ -118,59 +162,94 @@ def _send_via_smtp(mail_server: str, mail_port: int, mail_user: str, mail_pass: 
         print(f"[Email Service] ✅ Sent via STARTTLS:587 to {to_email}")
         return True
     except Exception as e:
-        errors.append(f"STARTTLS:587 → {e}")
-        print(f"[Email Service] ⚠️ STARTTLS:587 failed: {e}")
+        print(f"[Email Service] ⚠️ STARTTLS:587 failed (likely Render port block): {e}")
 
-    print(f"[Email Service] ❌ All SMTP attempts failed for {to_email}: {errors}")
     return False
 
 
 def _send_reset_email(email: str, name: str, token: str):
-    mail_user, mail_pass, mail_from, mail_from_name, mail_server, mail_port = _get_smtp_config()
+    load_dotenv(override=True)
     frontend_url = os.getenv("FRONTEND_URL", "https://student-planner-dashboard-lemon.vercel.app").rstrip("/")
     reset_link = f"{frontend_url}/reset-password?token={token}"
 
-    if not mail_user or not mail_pass:
-        print(f"[Email Service] ⚠️ MAIL_USERNAME or MAIL_PASSWORD not set — cannot send email.")
-        print(f"[Email Service] Reset link for {email}: {reset_link}")
-        return
+    print(f"\n==================================================")
+    print(f"[Email Service] 🔑 PASSWORD RESET REQUESTED FOR: {email}")
+    print(f"[Email Service] 🔗 RESET LINK: {reset_link}")
+    print(f"==================================================\n")
 
-    msg = _build_email_message(email, name, reset_link, mail_from, mail_from_name)
-    _send_via_smtp(mail_server, mail_port, mail_user, mail_pass, mail_from, email, msg)
+    text_body, html_body = _get_email_content(name, reset_link)
+    subject = "Reset your FocusNest password"
+
+    # Priority 1: Brevo HTTP API (recommended for Render free tier)
+    brevo_key = os.getenv("BREVO_API_KEY", "").strip().strip("\"'")
+    mail_user = os.getenv("MAIL_USERNAME", "").strip().strip("\"'")
+    mail_pass = os.getenv("MAIL_PASSWORD", "").strip().strip("\"'")
+    mail_from = (os.getenv("MAIL_FROM") or mail_user or "focusnest.auth@gmail.com").strip().strip("\"'")
+    mail_from_name = os.getenv("MAIL_FROM_NAME", "FocusNest").strip().strip("\"'")
+
+    if brevo_key:
+        if _send_via_brevo(brevo_key, mail_from, mail_from_name, email, name, subject, html_body, text_body):
+            return True
+
+    # Priority 2: Resend HTTP API
+    resend_key = os.getenv("RESEND_API_KEY", "").strip().strip("\"'")
+    if resend_key:
+        if _send_via_resend(resend_key, mail_from, mail_from_name, email, subject, html_body, text_body):
+            return True
+
+    # Priority 3: Direct SMTP fallback (works on localhost / paid cloud)
+    if mail_user and mail_pass:
+        mail_server = os.getenv("MAIL_SERVER", "smtp.gmail.com").strip().strip("\"'")
+        try:
+            mail_port = int(os.getenv("MAIL_PORT", "465"))
+        except ValueError:
+            mail_port = 465
+
+        if _send_via_smtp(mail_server, mail_port, mail_user, mail_pass, mail_from, email, subject, text_body, html_body):
+            return True
+
+    print(f"[Email Service] ⚠️ Notice: Direct SMTP is blocked on Render free tier. To enable instant email delivery, set BREVO_API_KEY or RESEND_API_KEY in Render environment variables.")
+    return False
 
 
 @router.get("/auth/smtp-status")
 def get_smtp_status():
-    mail_user, mail_pass, mail_from, mail_from_name, mail_server, mail_port = _get_smtp_config()
+    load_dotenv(override=True)
+    mail_user = os.getenv("MAIL_USERNAME", "").strip().strip("\"'")
+    mail_pass = os.getenv("MAIL_PASSWORD", "").strip().strip("\"'")
+    brevo_key = os.getenv("BREVO_API_KEY", "").strip().strip("\"'")
+    resend_key = os.getenv("RESEND_API_KEY", "").strip().strip("\"'")
+
+    active_provider = "none"
+    if brevo_key:
+        active_provider = "brevo_api (HTTPS 443 - Recommended for Render)"
+    elif resend_key:
+        active_provider = "resend_api (HTTPS 443)"
+    elif mail_user and mail_pass:
+        active_provider = "smtp_direct (Note: Render Free Tier blocks SMTP ports 25, 465, 587)"
+
     return {
-        "is_configured": bool(mail_user and mail_pass),
-        "mail_username_set": bool(mail_user),
-        "mail_password_set": bool(mail_pass),
+        "active_provider": active_provider,
+        "brevo_configured": bool(brevo_key),
+        "resend_configured": bool(resend_key),
+        "smtp_configured": bool(mail_user and mail_pass),
         "mail_username_preview": f"{mail_user[:3]}***@{mail_user.split('@')[-1]}" if "@" in mail_user else (mail_user[:3] + "***" if mail_user else ""),
-        "mail_server": mail_server,
-        "mail_port": mail_port,
+        "render_notice": "Render free tier blocks SMTP ports 25, 465, 587. Adding BREVO_API_KEY (free at brevo.com) uses HTTPS port 443 which is never blocked.",
         "frontend_url": os.getenv("FRONTEND_URL", "https://student-planner-dashboard-lemon.vercel.app")
     }
 
 
 @router.post("/auth/test-smtp")
-def test_smtp(db: Session = Depends(get_db)):
-    """Debug endpoint: sends a test email using current SMTP config. Remove in production."""
-    mail_user, mail_pass, mail_from, mail_from_name, mail_server, mail_port = _get_smtp_config()
-
-    if not mail_user or not mail_pass:
-        return {"success": False, "error": "MAIL_USERNAME or MAIL_PASSWORD not configured"}
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "FocusNest SMTP Test"
-    msg["From"] = f"{mail_from_name} <{mail_from}>"
-    msg["To"] = mail_user
-    msg.attach(MIMEText("This is a test email from FocusNest backend. SMTP is working!", "plain", "utf-8"))
-
-    ok = _send_via_smtp(mail_server, mail_port, mail_user, mail_pass, mail_from, mail_user, msg)
-    if ok:
-        return {"success": True, "message": f"Test email sent to {mail_user}"}
-    return {"success": False, "error": "All SMTP connection attempts failed. Check Render logs for details."}
+def test_smtp():
+    """Diagnostic endpoint to test email delivery."""
+    load_dotenv(override=True)
+    target = os.getenv("MAIL_USERNAME", "focusnest.auth@gmail.com").strip().strip("\"'")
+    success = _send_reset_email(target, "Test Admin", "test-token-12345")
+    return {
+        "attempted_recipient": target,
+        "success": success,
+        "notice": "Check Render Dashboard -> Logs for the complete delivery trace or direct reset link."
+    }
 
 
 # ── Auth endpoints ────────────────────────────────────────────────────────────
@@ -240,12 +319,33 @@ async def forgot_password(
     db.add(reset_token)
     db.commit()
 
-    try:
-        _send_reset_email(user.email, user.name, raw_token)
-    except Exception as e:
-        print(f"[Email Service] Error in forgot_password email dispatch: {e}")
+    # Dispatch email asynchronously in background so response is immediate
+    background_tasks.add_task(_send_reset_email, user.email, user.name, raw_token)
 
     return SAFE_MSG
+
+
+@router.get("/auth/dev/latest-reset-link")
+def get_latest_reset_link(email: str, db: Session = Depends(get_db)):
+    """Helper to retrieve the latest valid reset link for an email (Useful during development/testing)."""
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    token_record = db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.user_id == user.id,
+        models.PasswordResetToken.used == False
+    ).order_by(models.PasswordResetToken.id.desc()).first()
+
+    if not token_record:
+        raise HTTPException(status_code=404, detail="No active reset token found")
+
+    frontend_url = os.getenv("FRONTEND_URL", "https://student-planner-dashboard-lemon.vercel.app").rstrip("/")
+    return {
+        "email": email,
+        "reset_link": f"{frontend_url}/reset-password?token={token_record.token}",
+        "expires_at": token_record.expires_at
+    }
 
 
 @router.post("/auth/reset-password")
