@@ -20,27 +20,7 @@ router = APIRouter(tags=["Auth & Users"])
 RESET_TOKEN_EXPIRE_MINUTES = 15
 
 
-def _send_reset_email(email: str, name: str, token: str):
-    load_dotenv(override=True)
-    frontend_url = os.getenv("FRONTEND_URL", "https://student-planner-dashboard-lemon.vercel.app").rstrip("/")
-    reset_link = f"{frontend_url}/reset-password?token={token}"
-
-    mail_user = os.getenv("MAIL_USERNAME", "").strip().strip("\"'")
-    mail_pass = os.getenv("MAIL_PASSWORD", "").replace(" ", "").strip().strip("\"'")
-    mail_from = (os.getenv("MAIL_FROM") or mail_user).strip().strip("\"'")
-    mail_from_name = os.getenv("MAIL_FROM_NAME", "FocusNest").strip().strip("\"'")
-    mail_server = os.getenv("MAIL_SERVER", "smtp.gmail.com").strip().strip("\"'")
-    
-    try:
-        mail_port = int(os.getenv("MAIL_PORT", "587"))
-    except ValueError:
-        mail_port = 587
-
-    if not mail_user or not mail_pass:
-        print(f"[Email Service] ⚠️ Warning: MAIL_USERNAME or MAIL_PASSWORD not configured in server environment variables.")
-        print(f"[Email Service] Password Reset Link for {email}: {reset_link}")
-        return
-
+def _build_email_message(to_email: str, name: str, reset_link: str, mail_from: str, mail_from_name: str) -> MIMEMultipart:
     text_body = f"""Hi {name},
 
 We received a request to reset your FocusNest password.
@@ -89,36 +69,79 @@ FocusNest • Student Productivity Platform"""
     msg = MIMEMultipart("alternative")
     msg["Subject"] = "Reset your FocusNest password"
     msg["From"] = f"{mail_from_name} <{mail_from}>"
-    msg["To"] = email
+    msg["To"] = to_email
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
+    return msg
 
+
+def _get_smtp_config():
+    load_dotenv(override=True)
+    mail_user = os.getenv("MAIL_USERNAME", "").strip().strip("\"'")
+    mail_pass = os.getenv("MAIL_PASSWORD", "").strip().strip("\"'")
+    mail_from = (os.getenv("MAIL_FROM") or mail_user).strip().strip("\"'")
+    mail_from_name = os.getenv("MAIL_FROM_NAME", "FocusNest").strip().strip("\"'")
+    mail_server = os.getenv("MAIL_SERVER", "smtp.gmail.com").strip().strip("\"'")
     try:
-        if mail_port == 465:
-            with smtplib.SMTP_SSL(mail_server, 465, timeout=20) as server:
-                server.login(mail_user, mail_pass)
-                server.sendmail(mail_from, [email], msg.as_string())
-        else:
-            with smtplib.SMTP(mail_server, mail_port, timeout=20) as server:
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-                server.login(mail_user, mail_pass)
-                server.sendmail(mail_from, [email], msg.as_string())
+        mail_port = int(os.getenv("MAIL_PORT", "465"))
+    except ValueError:
+        mail_port = 465
+    return mail_user, mail_pass, mail_from, mail_from_name, mail_server, mail_port
 
-        print(f"[Email Service] ✅ Successfully sent password reset email to {email}")
+
+def _send_via_smtp(mail_server: str, mail_port: int, mail_user: str, mail_pass: str,
+                   mail_from: str, to_email: str, msg: MIMEMultipart):
+    """Try SSL first (port 465), then fall back to STARTTLS (port 587)."""
+    errors = []
+
+    # Attempt 1: SMTP_SSL on port 465
+    try:
+        print(f"[Email Service] Trying SMTP_SSL on {mail_server}:465...")
+        with smtplib.SMTP_SSL(mail_server, 465, timeout=20) as server:
+            server.login(mail_user, mail_pass)
+            server.sendmail(mail_from, [to_email], msg.as_string())
+        print(f"[Email Service] ✅ Sent via SSL:465 to {to_email}")
+        return True
     except Exception as e:
-        print(f"[Email Service] ❌ SMTP Error sending email to {email}: {e}")
+        errors.append(f"SSL:465 → {e}")
+        print(f"[Email Service] ⚠️ SSL:465 failed: {e}")
+
+    # Attempt 2: STARTTLS on port 587
+    try:
+        print(f"[Email Service] Trying STARTTLS on {mail_server}:587...")
+        with smtplib.SMTP(mail_server, 587, timeout=20) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(mail_user, mail_pass)
+            server.sendmail(mail_from, [to_email], msg.as_string())
+        print(f"[Email Service] ✅ Sent via STARTTLS:587 to {to_email}")
+        return True
+    except Exception as e:
+        errors.append(f"STARTTLS:587 → {e}")
+        print(f"[Email Service] ⚠️ STARTTLS:587 failed: {e}")
+
+    print(f"[Email Service] ❌ All SMTP attempts failed for {to_email}: {errors}")
+    return False
+
+
+def _send_reset_email(email: str, name: str, token: str):
+    mail_user, mail_pass, mail_from, mail_from_name, mail_server, mail_port = _get_smtp_config()
+    frontend_url = os.getenv("FRONTEND_URL", "https://student-planner-dashboard-lemon.vercel.app").rstrip("/")
+    reset_link = f"{frontend_url}/reset-password?token={token}"
+
+    if not mail_user or not mail_pass:
+        print(f"[Email Service] ⚠️ MAIL_USERNAME or MAIL_PASSWORD not set — cannot send email.")
+        print(f"[Email Service] Reset link for {email}: {reset_link}")
+        return
+
+    msg = _build_email_message(email, name, reset_link, mail_from, mail_from_name)
+    _send_via_smtp(mail_server, mail_port, mail_user, mail_pass, mail_from, email, msg)
 
 
 @router.get("/auth/smtp-status")
 def get_smtp_status():
-    load_dotenv(override=True)
-    mail_user = os.getenv("MAIL_USERNAME", "").strip().strip("\"'")
-    mail_pass = os.getenv("MAIL_PASSWORD", "").replace(" ", "").strip().strip("\"'")
-    mail_server = os.getenv("MAIL_SERVER", "smtp.gmail.com").strip().strip("\"'")
-    mail_port = os.getenv("MAIL_PORT", "587").strip().strip("\"'")
-    
+    mail_user, mail_pass, mail_from, mail_from_name, mail_server, mail_port = _get_smtp_config()
     return {
         "is_configured": bool(mail_user and mail_pass),
         "mail_username_set": bool(mail_user),
@@ -128,6 +151,26 @@ def get_smtp_status():
         "mail_port": mail_port,
         "frontend_url": os.getenv("FRONTEND_URL", "https://student-planner-dashboard-lemon.vercel.app")
     }
+
+
+@router.post("/auth/test-smtp")
+def test_smtp(db: Session = Depends(get_db)):
+    """Debug endpoint: sends a test email using current SMTP config. Remove in production."""
+    mail_user, mail_pass, mail_from, mail_from_name, mail_server, mail_port = _get_smtp_config()
+
+    if not mail_user or not mail_pass:
+        return {"success": False, "error": "MAIL_USERNAME or MAIL_PASSWORD not configured"}
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "FocusNest SMTP Test"
+    msg["From"] = f"{mail_from_name} <{mail_from}>"
+    msg["To"] = mail_user
+    msg.attach(MIMEText("This is a test email from FocusNest backend. SMTP is working!", "plain", "utf-8"))
+
+    ok = _send_via_smtp(mail_server, mail_port, mail_user, mail_pass, mail_from, mail_user, msg)
+    if ok:
+        return {"success": True, "message": f"Test email sent to {mail_user}"}
+    return {"success": False, "error": "All SMTP connection attempts failed. Check Render logs for details."}
 
 
 # ── Auth endpoints ────────────────────────────────────────────────────────────
