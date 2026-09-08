@@ -8,51 +8,48 @@ from sqlalchemy.orm import Session
 from app import models, schemas, auth
 from app.database import get_db
 
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
-from dotenv import load_dotenv
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-load_dotenv(override=True)   # override=True forces re-read even if already loaded
+load_dotenv(override=True)
 
 router = APIRouter(tags=["Auth & Users"])
 
 RESET_TOKEN_EXPIRE_MINUTES = 15
 
 
-def _get_mail_config() -> ConnectionConfig:
-    """
-    Build ConnectionConfig fresh on every call so that updates to .env
-    are always picked up without restarting the server.
-    """
+def _send_reset_email(email: str, name: str, token: str):
     load_dotenv(override=True)
-    mail_user = os.getenv("MAIL_USERNAME", "").strip()
-    mail_pass = os.getenv("MAIL_PASSWORD", "").strip()
-    mail_from = os.getenv("MAIL_FROM", "").strip() or mail_user or "noreply@focusnest.app"
-
-    return ConnectionConfig(
-        MAIL_USERNAME   = mail_user,
-        MAIL_PASSWORD   = mail_pass,
-        MAIL_FROM       = mail_from,
-        MAIL_FROM_NAME  = os.getenv("MAIL_FROM_NAME", "FocusNest"),
-        MAIL_SERVER     = os.getenv("MAIL_SERVER", "smtp.gmail.com"),
-        MAIL_PORT       = int(os.getenv("MAIL_PORT", "587")),
-        MAIL_STARTTLS   = os.getenv("MAIL_STARTTLS", "True") == "True",
-        MAIL_SSL_TLS    = os.getenv("MAIL_SSL_TLS", "False") == "True",
-        USE_CREDENTIALS = bool(mail_user and mail_pass),
-        VALIDATE_CERTS  = True,
-    )
-
-
-async def _send_reset_email(email: str, name: str, token: str):
     frontend_url = os.getenv("FRONTEND_URL", "https://student-planner-dashboard-lemon.vercel.app").rstrip("/")
     reset_link = f"{frontend_url}/reset-password?token={token}"
 
     mail_user = os.getenv("MAIL_USERNAME", "").strip()
     mail_pass = os.getenv("MAIL_PASSWORD", "").strip()
+    mail_from = os.getenv("MAIL_FROM", "").strip() or mail_user
+    mail_from_name = os.getenv("MAIL_FROM_NAME", "FocusNest").strip()
+    mail_server = os.getenv("MAIL_SERVER", "smtp.gmail.com").strip()
+    
+    try:
+        mail_port = int(os.getenv("MAIL_PORT", "587"))
+    except ValueError:
+        mail_port = 587
 
     if not mail_user or not mail_pass:
-        print(f"[Email Service] ⚠️ Warning: MAIL_USERNAME or MAIL_PASSWORD is not configured on the backend server.")
+        print(f"[Email Service] ⚠️ Warning: MAIL_USERNAME or MAIL_PASSWORD not configured in server environment variables.")
         print(f"[Email Service] Password Reset Link for {email}: {reset_link}")
         return
+
+    text_body = f"""Hi {name},
+
+We received a request to reset your FocusNest password.
+Click the link below to set a new password:
+{reset_link}
+
+This link is valid for 15 minutes.
+If you didn't request this, you can safely ignore this email.
+
+FocusNest • Student Productivity Platform"""
 
     html_body = f"""
     <div style="font-family:sans-serif;max-width:520px;margin:auto;padding:32px 24px;background:#f8faff;border-radius:12px;">
@@ -87,18 +84,49 @@ async def _send_reset_email(email: str, name: str, token: str):
       </p>
     </div>
     """
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Reset your FocusNest password"
+    msg["From"] = f"{mail_from_name} <{mail_from}>"
+    msg["To"] = email
+    msg.attach(MIMEText(text_body, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
     try:
-        message = MessageSchema(
-            subject="Reset your FocusNest password",
-            recipients=[email],
-            body=html_body,
-            subtype=MessageType.html,
-        )
-        fm = FastMail(_get_mail_config())
-        await fm.send_message(message)
+        if mail_port == 465:
+            with smtplib.SMTP_SSL(mail_server, 465, timeout=20) as server:
+                server.login(mail_user, mail_pass)
+                server.sendmail(mail_from, [email], msg.as_string())
+        else:
+            with smtplib.SMTP(mail_server, mail_port, timeout=20) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(mail_user, mail_pass)
+                server.sendmail(mail_from, [email], msg.as_string())
+
         print(f"[Email Service] ✅ Successfully sent password reset email to {email}")
     except Exception as e:
-        print(f"[Email Service] ❌ Failed to send password reset email to {email}: {e}")
+        print(f"[Email Service] ❌ SMTP Error sending email to {email}: {e}")
+
+
+@router.get("/auth/smtp-status")
+def get_smtp_status():
+    load_dotenv(override=True)
+    mail_user = os.getenv("MAIL_USERNAME", "").strip()
+    mail_pass = os.getenv("MAIL_PASSWORD", "").strip()
+    mail_server = os.getenv("MAIL_SERVER", "smtp.gmail.com").strip()
+    mail_port = os.getenv("MAIL_PORT", "587").strip()
+    
+    return {
+        "is_configured": bool(mail_user and mail_pass),
+        "mail_username_set": bool(mail_user),
+        "mail_password_set": bool(mail_pass),
+        "mail_username_preview": f"{mail_user[:3]}***@{mail_user.split('@')[-1]}" if "@" in mail_user else (mail_user[:3] + "***" if mail_user else ""),
+        "mail_server": mail_server,
+        "mail_port": mail_port,
+        "frontend_url": os.getenv("FRONTEND_URL", "https://student-planner-dashboard-lemon.vercel.app")
+    }
 
 
 # ── Auth endpoints ────────────────────────────────────────────────────────────
