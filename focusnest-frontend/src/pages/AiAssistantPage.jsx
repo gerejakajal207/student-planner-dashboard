@@ -293,9 +293,10 @@ export default function AiAssistantPage() {
     if (!scheduleResult || addingToSchedule || scheduleAdded) return;
     setAddingToSchedule(true);
 
+    const { daily_tasks = [], exam_task = null } = scheduleResult || {};
     const daily = Array.isArray(daily_tasks) ? daily_tasks : [];
     const allItems = [...daily];
-    if (exam_task && typeof exam_task === 'object' && (exam_task.title || exam_task.taskName)) {
+    if (exam_task && typeof exam_task === "object" && (exam_task.title || exam_task.taskName)) {
       allItems.push(exam_task);
     }
 
@@ -319,9 +320,9 @@ export default function AiAssistantPage() {
     } catch {
       // batch-add failed — try individual adds as fallback
       try {
-        for (const t of daily_tasks) {
+        for (const t of daily) {
           await addTask({
-            taskName: t.title,
+            taskName: t.title || "Study Task",
             taskDescription: t.description || "",
             taskDueDate: t.date || t.due_date || new Date().toISOString().split("T")[0],
             subject: subject.trim(),
@@ -330,15 +331,17 @@ export default function AiAssistantPage() {
             effort: t.effort || "Medium"
           });
         }
-        await addTask({
-          taskName: exam_task.title,
-          taskDescription: exam_task.description || "",
-          taskDueDate: exam_task.date || exam_task.due_date || new Date().toISOString().split("T")[0],
-          subject: subject.trim(),
-          category: "Exam",
-          priority: "High",
-          effort: "High"
-        });
+        if (exam_task && typeof exam_task === "object" && (exam_task.title || exam_task.taskName)) {
+          await addTask({
+            taskName: exam_task.title || exam_task.taskName || "Final Exam",
+            taskDescription: exam_task.description || "",
+            taskDueDate: exam_task.date || exam_task.due_date || new Date().toISOString().split("T")[0],
+            subject: subject.trim(),
+            category: "Exam",
+            priority: "High",
+            effort: "High"
+          });
+        }
       } catch (fallbackErr) {
         showToast(`Failed to add tasks: ${fallbackErr.message}`, "error");
         setAddingToSchedule(false);
