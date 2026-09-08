@@ -175,7 +175,7 @@ export default function HomePage() {
 
           <div className="relative">
             <h1 className="text-2xl font-extrabold text-slate-800 dark:text-white sm:text-3xl">
-              {getGreeting()}, {user?.name?.split(" ")[0] || "Student"}! 👋
+              {getGreeting()}, {user?.name?.split(" ")[0] || "Student"}!
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-[#94a3b8] mt-1">Ready to make today productive and achieve your goals?</p>
           </div>
