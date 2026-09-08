@@ -197,7 +197,10 @@ async def forgot_password(
     db.add(reset_token)
     db.commit()
 
-    background_tasks.add_task(_send_reset_email, user.email, user.name, raw_token)
+    try:
+        _send_reset_email(user.email, user.name, raw_token)
+    except Exception as e:
+        print(f"[Email Service] Error in forgot_password email dispatch: {e}")
 
     return SAFE_MSG
 
