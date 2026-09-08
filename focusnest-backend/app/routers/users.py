@@ -25,11 +25,11 @@ def _send_reset_email(email: str, name: str, token: str):
     frontend_url = os.getenv("FRONTEND_URL", "https://student-planner-dashboard-lemon.vercel.app").rstrip("/")
     reset_link = f"{frontend_url}/reset-password?token={token}"
 
-    mail_user = os.getenv("MAIL_USERNAME", "").strip()
-    mail_pass = os.getenv("MAIL_PASSWORD", "").strip()
-    mail_from = os.getenv("MAIL_FROM", "").strip() or mail_user
-    mail_from_name = os.getenv("MAIL_FROM_NAME", "FocusNest").strip()
-    mail_server = os.getenv("MAIL_SERVER", "smtp.gmail.com").strip()
+    mail_user = os.getenv("MAIL_USERNAME", "").strip().strip("\"'")
+    mail_pass = os.getenv("MAIL_PASSWORD", "").replace(" ", "").strip().strip("\"'")
+    mail_from = (os.getenv("MAIL_FROM") or mail_user).strip().strip("\"'")
+    mail_from_name = os.getenv("MAIL_FROM_NAME", "FocusNest").strip().strip("\"'")
+    mail_server = os.getenv("MAIL_SERVER", "smtp.gmail.com").strip().strip("\"'")
     
     try:
         mail_port = int(os.getenv("MAIL_PORT", "587"))
@@ -114,10 +114,10 @@ FocusNest • Student Productivity Platform"""
 @router.get("/auth/smtp-status")
 def get_smtp_status():
     load_dotenv(override=True)
-    mail_user = os.getenv("MAIL_USERNAME", "").strip()
-    mail_pass = os.getenv("MAIL_PASSWORD", "").strip()
-    mail_server = os.getenv("MAIL_SERVER", "smtp.gmail.com").strip()
-    mail_port = os.getenv("MAIL_PORT", "587").strip()
+    mail_user = os.getenv("MAIL_USERNAME", "").strip().strip("\"'")
+    mail_pass = os.getenv("MAIL_PASSWORD", "").replace(" ", "").strip().strip("\"'")
+    mail_server = os.getenv("MAIL_SERVER", "smtp.gmail.com").strip().strip("\"'")
+    mail_port = os.getenv("MAIL_PORT", "587").strip().strip("\"'")
     
     return {
         "is_configured": bool(mail_user and mail_pass),
