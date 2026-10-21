@@ -9,6 +9,7 @@ import {
   Trash2,
   Sparkles,
   X,
+  FolderPlus,
 } from "lucide-react";
 import { api } from "../api";
 
@@ -58,6 +59,15 @@ export default function FlashcardsPage() {
   const [isFlipped, setIsFlipped] = useState(false);
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [isCreatingDeck, setIsCreatingDeck] = useState(false);
+
+  // Custom Deck creation state
+  const [newDeckData, setNewDeckData] = useState({
+    title: "",
+    subject: "",
+    firstFront: "",
+    firstBack: "",
+  });
 
   // AI Generator state
   const [aiTopic, setAiTopic] = useState("");
@@ -141,6 +151,35 @@ export default function FlashcardsPage() {
     }
     setNewCard({ front: "", back: "" });
     setIsAddingCard(false);
+  };
+
+  const handleCreateDeck = (e) => {
+    e.preventDefault();
+    if (!newDeckData.title.trim()) return;
+
+    const initialCards = [];
+    if (newDeckData.firstFront.trim() && newDeckData.firstBack.trim()) {
+      initialCards.push({
+        id: Date.now(),
+        front: newDeckData.firstFront.trim(),
+        back: newDeckData.firstBack.trim(),
+      });
+    }
+
+    const newDeck = {
+      id: `deck-${Date.now()}`,
+      title: newDeckData.title.trim(),
+      subject: newDeckData.subject.trim() || newDeckData.title.trim(),
+      difficulty: "Medium",
+      cards: initialCards,
+    };
+
+    setDecks((prev) => [newDeck, ...prev]);
+    setActiveDeckId(newDeck.id);
+    setCurrentCardIndex(0);
+    setIsFlipped(false);
+    setNewDeckData({ title: "", subject: "", firstFront: "", firstBack: "" });
+    setIsCreatingDeck(false);
   };
 
   const handleDeleteCard = (cardId) => {
@@ -241,7 +280,7 @@ export default function FlashcardsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             <button
               onClick={() => setIsGeneratingAi(true)}
               className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 px-4 py-2.5 text-xs sm:text-sm font-bold text-white shadow-md shadow-indigo-200 dark:shadow-indigo-950/80 transition-all active:scale-95"
@@ -249,11 +288,19 @@ export default function FlashcardsPage() {
               <Sparkles size={16} /> Generate with AI
             </button>
             <button
-              onClick={() => setIsAddingCard(true)}
+              onClick={() => setIsCreatingDeck(true)}
               className="flex items-center gap-2 rounded-xl bg-white dark:bg-[#161b22] hover:bg-slate-100 dark:hover:bg-[#1e2530] border border-slate-200 dark:border-white/[0.07] px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-[#e2e8f0] shadow-sm transition-all active:scale-95"
             >
-              <Plus size={16} /> Add Card
+              <FolderPlus size={16} /> New Deck
             </button>
+            {decks.length > 0 && (
+              <button
+                onClick={() => setIsAddingCard(true)}
+                className="flex items-center gap-2 rounded-xl bg-white dark:bg-[#161b22] hover:bg-slate-100 dark:hover:bg-[#1e2530] border border-slate-200 dark:border-white/[0.07] px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-[#e2e8f0] shadow-sm transition-all active:scale-95"
+              >
+                <Plus size={16} /> Add Card
+              </button>
+            )}
           </div>
         </div>
 
@@ -299,7 +346,7 @@ export default function FlashcardsPage() {
                 <Sparkles size={16} /> Generate Deck with AI
               </button>
               <button
-                onClick={() => setIsAddingCard(true)}
+                onClick={() => setIsCreatingDeck(true)}
                 className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e2530] hover:bg-slate-50 dark:hover:bg-[#252d3a] px-5 py-3 text-sm font-semibold text-slate-700 dark:text-[#e2e8f0] transition-all"
               >
                 <Plus size={16} /> Create Custom Deck
@@ -349,6 +396,12 @@ export default function FlashcardsPage() {
                     </button>
                   </div>
                 ))}
+                <button
+                  onClick={() => setIsCreatingDeck(true)}
+                  className="flex items-center gap-1.5 rounded-xl border border-dashed border-slate-300 dark:border-white/[0.15] hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 px-3.5 py-2.5 text-xs font-semibold text-slate-500 dark:text-[#94a3b8] transition-all whitespace-nowrap flex-shrink-0"
+                >
+                  <Plus size={14} /> New Deck
+                </button>
               </div>
             </div>
 
@@ -634,6 +687,126 @@ export default function FlashcardsPage() {
           </div>
         )}
 
+        {/* ── CREATE CUSTOM DECK MODAL ── */}
+        {isCreatingDeck && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+            onClick={() => setIsCreatingDeck(false)}
+          >
+            <form
+              onSubmit={handleCreateDeck}
+              className="w-full max-w-lg rounded-3xl bg-white dark:bg-[#161b22] p-6 sm:p-7 shadow-2xl border border-slate-100 dark:border-white/[0.07]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/[0.12] text-indigo-600 dark:text-indigo-400">
+                    <FolderPlus size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-white">
+                      Create Custom Deck
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-[#94a3b8]">
+                      Create a manual deck and add your first flashcard
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingDeck(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-4 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-[#cbd5e1] mb-1">
+                      Deck Title *
+                    </label>
+                    <input
+                      type="text"
+                      value={newDeckData.title}
+                      onChange={(e) => setNewDeckData({ ...newDeckData, title: e.target.value })}
+                      placeholder="e.g. Operating Systems"
+                      className="w-full rounded-xl border border-slate-200 dark:border-white/[0.1] bg-slate-50 dark:bg-[#1e2530] p-2.5 text-xs font-medium text-slate-800 dark:text-[#e2e8f0] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-[#cbd5e1] mb-1">
+                      Subject / Category
+                    </label>
+                    <input
+                      type="text"
+                      value={newDeckData.subject}
+                      onChange={(e) => setNewDeckData({ ...newDeckData, subject: e.target.value })}
+                      placeholder="e.g. Computer Science"
+                      className="w-full rounded-xl border border-slate-200 dark:border-white/[0.1] bg-slate-50 dark:bg-[#1e2530] p-2.5 text-xs font-medium text-slate-800 dark:text-[#e2e8f0] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200/80 dark:border-white/[0.06] bg-slate-50/50 dark:bg-[#1e2530]/40 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-[#cbd5e1]">
+                      First Flashcard (Optional)
+                    </span>
+                    <span className="text-[11px] text-slate-400">Can add more later</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                      Front (Question / Concept)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={newDeckData.firstFront}
+                      onChange={(e) => setNewDeckData({ ...newDeckData, firstFront: e.target.value })}
+                      placeholder="e.g. What is a Deadlock?"
+                      className="w-full rounded-xl border border-slate-200 dark:border-white/[0.1] bg-white dark:bg-[#161b22] p-2.5 text-xs text-slate-800 dark:text-[#e2e8f0] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                      Back (Answer / Definition)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={newDeckData.firstBack}
+                      onChange={(e) => setNewDeckData({ ...newDeckData, firstBack: e.target.value })}
+                      placeholder="e.g. A state where processes are blocked because each holds a resource and waits for another."
+                      className="w-full rounded-xl border border-slate-200 dark:border-white/[0.1] bg-white dark:bg-[#161b22] p-2.5 text-xs text-slate-800 dark:text-[#e2e8f0] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-white/[0.07]">
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingDeck(false)}
+                  className="rounded-xl px-4 py-2 text-xs font-medium text-slate-600 dark:text-[#cbd5e1] hover:bg-slate-100 dark:hover:bg-[#1e2530] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newDeckData.title.trim()}
+                  className="flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-5 py-2 text-xs font-bold text-white shadow-md shadow-indigo-200 transition-all active:scale-95 disabled:opacity-40"
+                >
+                  <Plus size={14} /> Create Deck
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
         {/* ── MANUAL ADD CARD MODAL ── */}
         {isAddingCard && (
           <div
@@ -658,7 +831,7 @@ export default function FlashcardsPage() {
                 </button>
               </div>
               <p className="text-xs text-slate-500 dark:text-[#94a3b8] mb-4">
-                Adding to deck: <span className="font-semibold text-indigo-600">{activeDeck.title}</span>
+                Adding to deck: <span className="font-semibold text-indigo-600">{activeDeck?.title || "Custom Deck"}</span>
               </p>
 
               <div className="space-y-4">
