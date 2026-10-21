@@ -189,6 +189,10 @@ export default function McqTestPage() {
       const data = await api.aiMcqs(aiTopic.trim(), aiDifficulty, aiCount);
       const generatedQuestions = data.questions || [];
 
+      if (!generatedQuestions.length) {
+        throw new Error("No MCQs were generated for this topic. Please try another topic or adjust difficulty.");
+      }
+
       const newQuiz = {
         id: `ai-quiz-${Date.now()}`,
         title: aiTopic.trim(),

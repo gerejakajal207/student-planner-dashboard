@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import asyncio
 from datetime import datetime, timedelta, date
 from typing import List, Optional
 import httpx
@@ -18,28 +19,41 @@ router = APIRouter(prefix="/ai", tags=["AI Assistant"])
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+# Prioritize gemini-3.5-flash-lite (high limits, super fast, active) followed by 3.5-flash, 2.5-flash, 2.5-pro
 MODELS = [
-    "gemini-2.5-flash",
+    "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
-    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
 ]
+
+# In-memory tracking of models that hit quota limits: model -> epoch timestamp
+EXHAUSTED_UNTIL = {}
 
 
 def extract_json(text: str):
-    cleaned = re.sub(r"```json|```", "", text).strip()
+    if not text or not text.strip():
+        raise ValueError("Empty response from AI")
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.MULTILINE).strip()
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        match = re.search(r'(\[[\s\S]*\]|\{[\s\S]*\})', cleaned)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                pass
-        raise ValueError(f"Could not parse valid JSON from AI response: {text[:150]}")
+        pass
+    try:
+        return json.loads(cleaned, strict=False)
+    except json.JSONDecodeError:
+        pass
+    match = re.search(r'(\[[\s\S]*\]|\{[\s\S]*\})', cleaned)
+    if match:
+        block = match.group(1)
+        try:
+            return json.loads(block, strict=False)
+        except json.JSONDecodeError:
+            pass
+    raise ValueError(f"Could not parse valid JSON from AI response: {text[:150]}")
 
 
-async def call_gemini(prompt: str, system_instruction: str = "") -> str:
+async def call_gemini(prompt: str, system_instruction: str = "", is_json: bool = False) -> str:
     key = os.getenv("GEMINI_API_KEY") or GEMINI_API_KEY
     if not key:
         raise HTTPException(
@@ -48,30 +62,56 @@ async def call_gemini(prompt: str, system_instruction: str = "") -> str:
         )
 
     last_error = None
-    async with httpx.AsyncClient(timeout=35.0) as client:
-        for model in MODELS:
-            try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
-                payload = {
-                    "contents": [{"parts": [{"text": prompt}]}]
-                }
-                if system_instruction:
-                    payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+    gen_config = {
+        "temperature": 0.4 if is_json else 0.7,
+        "maxOutputTokens": 8192,
+    }
+    if is_json:
+        gen_config["responseMimeType"] = "application/json"
 
-                resp = await client.post(url, json=payload)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        content_parts = candidates[0].get("content", {}).get("parts", [])
-                        if content_parts and "text" in content_parts[0]:
-                            return content_parts[0]["text"]
-                else:
-                    err_json = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-                    err_msg = err_json.get("error", {}).get("message", f"HTTP {resp.status_code}: {resp.text}")
-                    last_error = err_msg
-            except Exception as e:
-                last_error = str(e)
+    now = datetime.now().timestamp()
+    models_to_try = [m for m in MODELS if EXHAUSTED_UNTIL.get(m, 0) < now]
+    if not models_to_try:
+        models_to_try = list(MODELS)
+
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        for model in models_to_try:
+            for attempt in range(2):
+                try:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+                    payload = {
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": gen_config,
+                    }
+                    if system_instruction:
+                        payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+
+                    resp = await client.post(url, json=payload)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            content_parts = candidates[0].get("content", {}).get("parts", [])
+                            if content_parts and "text" in content_parts[0]:
+                                return content_parts[0]["text"]
+                    elif resp.status_code in (429, 503):
+                        err_json = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                        err_msg = err_json.get("error", {}).get("message", f"HTTP {resp.status_code}")
+                        last_error = f"{model}: {err_msg}"
+                        # If a daily quota is reached, cool down this model for 30 minutes so other requests bypass it immediately
+                        if "quota" in err_msg.lower() or "resource_exhausted" in resp.text.lower() or "limit" in err_msg.lower():
+                            EXHAUSTED_UNTIL[model] = datetime.now().timestamp() + 1800
+                            break
+                        await asyncio.sleep(1.0)
+                        continue
+                    else:
+                        err_json = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                        err_msg = err_json.get("error", {}).get("message", f"HTTP {resp.status_code}: {resp.text[:150]}")
+                        last_error = f"{model}: {err_msg}"
+                        break
+                except Exception as e:
+                    last_error = f"{model}: {str(e)}"
+                    break
 
     raise HTTPException(
         status_code=status.HTTP_502_BAD_GATEWAY,
@@ -201,7 +241,7 @@ Ensure "daily_tasks" has exactly {len(prep_dates)} items corresponding to the da
 Return ONLY the JSON object with no extra text or markdown formatting.
 """
 
-    raw_response = await call_gemini(prompt, "You are a specialized study planner JSON generator.")
+    raw_response = await call_gemini(prompt, "You are a specialized study planner JSON generator.", is_json=True)
     parsed = extract_json(raw_response)
 
     # Validate and normalize daily tasks
@@ -268,7 +308,7 @@ Return a strictly valid JSON object in this format:
 }}
 Return ONLY the JSON object.
 """
-    raw_response = await call_gemini(prompt, "You are an expert task decomposer JSON generator.")
+    raw_response = await call_gemini(prompt, "You are an expert task decomposer JSON generator.", is_json=True)
     return extract_json(raw_response)
 
 
@@ -291,7 +331,7 @@ Structure your response with:
 
 Use clear markdown formatting with bold terms and spacing.
 """
-    text = await call_gemini(prompt, "You are a clear and lucid science and humanities educator.")
+    text = await call_gemini(prompt, "You are a clear and lucid science and humanities educator.", is_json=False)
     return {"explanation": text.strip()}
 
 
@@ -313,7 +353,7 @@ Return ONLY a valid JSON array of objects with no markdown fences, no conversati
   }}
 ]
 """
-    raw = await call_gemini(prompt, "You are a study flashcard JSON generator.")
+    raw = await call_gemini(prompt, "You are a study flashcard JSON generator.", is_json=True)
     parsed = extract_json(raw)
     if not isinstance(parsed, list):
         raise HTTPException(status_code=500, detail="Model did not return a valid list of flashcards.")
@@ -355,7 +395,7 @@ Return ONLY a valid JSON array of objects in this exact format:
   }}
 ]
 """
-    raw = await call_gemini(prompt, "You are an exam MCQ JSON generator.")
+    raw = await call_gemini(prompt, "You are an exam MCQ JSON generator.", is_json=True)
     parsed = extract_json(raw)
     if not isinstance(parsed, list):
         raise HTTPException(status_code=500, detail="Model did not return a valid list of MCQs.")
@@ -455,39 +495,37 @@ class ValidateTopicRequest(BaseModel):
 async def validate_topic(req: ValidateTopicRequest):
     """
     Validates whether a user-submitted topic is meaningful enough to generate
-    study material for. Returns one of three statuses:
-      - "valid"     → topic is clear and specific, proceed to generation
-      - "ambiguous" → topic could mean different things; ask user to clarify
-      - "invalid"   → gibberish, too vague, or not a study topic
+    study material for without wasting unnecessary LLM quota.
     """
     topic = req.topic.strip()
     if not topic:
         return {"status": "invalid", "message": "Please enter a topic to study.", "options": []}
 
-    prompt = f"""
-A user wants to study about: "{topic}"
-
-Analyze this topic and respond ONLY with a JSON object in one of these formats:
-
-1. If the topic is meaningless, gibberish, or too vague to study (like "123", "asdf", "xyz", "stuff"):
-{{"status": "invalid", "message": "That doesn't seem like a valid study topic. Could you enter something like 'Photosynthesis', 'World War 2', or 'Python programming'?"}}
-
-2. If the topic is ambiguous and could belong to multiple very different fields (like "focus", "wave", "force", "cell", "current"):
-{{"status": "ambiguous", "message": "brief friendly message asking to clarify", "options": ["Field 1: specific meaning", "Field 2: specific meaning", "Field 3: specific meaning"]}}
-
-3. If the topic is clear and specific enough to generate study material:
-{{"status": "valid", "message": ""}}
-
-Return ONLY the JSON object, no extra text.
-"""
-    try:
-        raw = await call_gemini(prompt, "You are a topic relevance classifier. Always return valid JSON only.")
-        result = extract_json(raw)
+    # Instant heuristic checks to prevent wasting LLM calls on pure numbers or single letters
+    cleaned = re.sub(r"[^\w\s]", "", topic).strip()
+    if len(cleaned) < 2 or cleaned.isdigit():
         return {
-            "status":  result.get("status", "valid"),
-            "message": result.get("message", ""),
-            "options": result.get("options", []),
+            "status": "invalid",
+            "message": "That doesn't seem like a valid study topic. Please enter something like 'Photosynthesis', 'World War 2', or 'Data Structures'.",
+            "options": []
         }
-    except Exception:
-        # If validation itself fails, let the request through rather than blocking the user
-        return {"status": "valid", "message": "", "options": []}
+
+    # Known ambiguous single terms with instant disambiguation options (0 API calls)
+    AMBIGUOUS_MAP = {
+        "cell": ["Biology: Animal & Plant Cell Biology", "Technology: Cellular Networks & Telecom", "Physics: Fuel & Electrochemical Cells"],
+        "current": ["Physics: Electric Current & Circuits", "Geography: Ocean Currents & Climate", "Finance: Current Assets & Currency"],
+        "wave": ["Physics: Sound & Electromagnetic Waves", "Earth Science: Ocean Waves & Tsunami", "Math: Sine & Cosine Wave Functions"],
+        "force": ["Physics: Newtonian Mechanics & Dynamics", "Earth Science: Plate Tectonics & Geological Forces", "History: Military Air/Ground Forces"],
+        "plant": ["Biology: Plant Anatomy & Photosynthesis", "Engineering: Power Plants & Manufacturing", "Botany: Classification of Flora"],
+        "focus": ["Psychology: Cognitive Focus & Attention", "Optics: Focal Points & Lenses", "Photography: Camera Aperture & Depth of Field"],
+    }
+    lower_t = topic.lower().strip()
+    if lower_t in AMBIGUOUS_MAP:
+        return {
+            "status": "ambiguous",
+            "message": f"'{topic}' can refer to several subjects. Please select an area to focus on:",
+            "options": AMBIGUOUS_MAP[lower_t]
+        }
+
+    # For standard study topics, immediately validate without consuming an LLM call!
+    return {"status": "valid", "message": "", "options": []}

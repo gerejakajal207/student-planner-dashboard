@@ -213,6 +213,10 @@ export default function FlashcardsPage() {
       const data = await api.aiFlashcards(aiTopic.trim(), aiDifficulty, aiCount);
       const generated = data.cards || [];
 
+      if (!generated.length) {
+        throw new Error("No flashcards were generated for this topic. Please try another topic or adjust difficulty.");
+      }
+
       const newDeck = {
         id: `ai-${Date.now()}`,
         title: aiTopic.trim(),
