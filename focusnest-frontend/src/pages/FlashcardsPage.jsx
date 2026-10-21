@@ -12,42 +12,6 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 
-const DEFAULT_DECKS = [
-  {
-    id: "cs-default",
-    title: "Data Structures & Algorithms",
-    subject: "Computer Science",
-    difficulty: "Medium",
-    cards: [
-      { id: 1, front: "What is the time complexity of QuickSort in the average case?", back: "O(n log n). The worst-case is O(n²) when the pivot is chosen poorly." },
-      { id: 2, front: "Explain the difference between a Process and a Thread.", back: "A Process is an independent executing program with its own memory space, while a Thread is a lightweight unit of execution sharing the parent process's memory." },
-      { id: 3, front: "What is the principle of ACID in database systems?", back: "Atomicity, Consistency, Isolation, and Durability — guaranteeing reliable database transactions." },
-      { id: 4, front: "What does the CAP Theorem state for distributed systems?", back: "A distributed system can guarantee at most two out of three: Consistency, Availability, and Partition Tolerance." },
-    ],
-  },
-  {
-    id: "math-default",
-    title: "Calculus & Linear Algebra",
-    subject: "Mathematics",
-    difficulty: "Medium",
-    cards: [
-      { id: 5, front: "What is Euler's Formula?", back: "e^(iπ) + 1 = 0, connecting exponential functions, imaginary numbers, and trigonometry." },
-      { id: 6, front: "What does the Determinant of a matrix tell us?", back: "It indicates if a matrix is invertible (det ≠ 0) and represents the scaling factor of the linear transformation." },
-      { id: 7, front: "State the Fundamental Theorem of Calculus.", back: "Differentiation and integration are inverse operations: if f is continuous on [a, b], then ∫_a^b f(x) dx = F(b) - F(a) where F'(x) = f(x)." },
-    ],
-  },
-  {
-    id: "bio-default",
-    title: "Cell Biology & Genetics",
-    subject: "Biology",
-    difficulty: "Easy",
-    cards: [
-      { id: 8, front: "What is the primary function of Mitochondria?", back: "Generating cellular adenosine triphosphate (ATP) through cellular respiration to power biochemical reactions." },
-      { id: 9, front: "What are the four nucleotide bases in DNA?", back: "Adenine (A), Thymine (T), Cytosine (C), and Guanine (G). In RNA, Uracil (U) replaces Thymine." },
-    ],
-  },
-];
-
 const POPULAR_TOPICS = [
   "Python Programming",
   "World War II",
@@ -61,14 +25,33 @@ export default function FlashcardsPage() {
   const [decks, setDecks] = useState(() => {
     try {
       const saved = localStorage.getItem("focusnest_flashcard_decks");
-      return saved ? JSON.parse(saved) : DEFAULT_DECKS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Exclude old hardcoded default decks if present
+        return parsed.filter(
+          (d) => !["cs-default", "math-default", "bio-default"].includes(d.id)
+        );
+      }
+      return [];
     } catch {
-      return DEFAULT_DECKS;
+      return [];
     }
   });
 
   const [activeDeckId, setActiveDeckId] = useState(() => {
-    return decks[0]?.id || "cs-default";
+    try {
+      const saved = localStorage.getItem("focusnest_flashcard_decks");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const userDecks = parsed.filter(
+          (d) => !["cs-default", "math-default", "bio-default"].includes(d.id)
+        );
+        return userDecks[0]?.id || null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   });
 
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
@@ -96,18 +79,9 @@ export default function FlashcardsPage() {
     }
   }, [decks]);
 
-  const activeDeck = decks.find((d) => d.id === activeDeckId) || decks[0] || {
-    id: "empty",
-    title: "No Decks",
-    subject: "General",
-    cards: [],
-  };
-
-  const cards = activeDeck.cards || [];
-  const currentCard = cards[currentCardIndex] || {
-    front: "No cards in this deck yet.",
-    back: "Click 'Add Card' or 'Generate with AI' to start studying!",
-  };
+  const activeDeck = decks.find((d) => d.id === activeDeckId) || decks[0] || null;
+  const cards = activeDeck?.cards || [];
+  const currentCard = cards[currentCardIndex] || null;
 
   const handleNext = () => {
     if (cards.length <= 1) return;
@@ -149,9 +123,22 @@ export default function FlashcardsPage() {
       back: newCard.back.trim(),
     };
 
-    setDecks((prev) =>
-      prev.map((d) => (d.id === activeDeckId ? { ...d, cards: [...d.cards, created] } : d))
-    );
+    if (decks.length === 0 || !activeDeckId) {
+      const newDeck = {
+        id: `deck-${Date.now()}`,
+        title: "My Custom Deck",
+        subject: "General",
+        difficulty: "Medium",
+        cards: [created],
+      };
+      setDecks([newDeck]);
+      setActiveDeckId(newDeck.id);
+      setCurrentCardIndex(0);
+    } else {
+      setDecks((prev) =>
+        prev.map((d) => (d.id === activeDeckId ? { ...d, cards: [...d.cards, created] } : d))
+      );
+    }
     setNewCard({ front: "", back: "" });
     setIsAddingCard(false);
   };
@@ -168,15 +155,12 @@ export default function FlashcardsPage() {
   };
 
   const handleDeleteDeck = (deckId) => {
-    if (decks.length <= 1) {
-      alert("You need at least one deck.");
-      return;
-    }
     const remaining = decks.filter((d) => d.id !== deckId);
     setDecks(remaining);
     if (activeDeckId === deckId) {
-      setActiveDeckId(remaining[0].id);
+      setActiveDeckId(remaining[0]?.id || null);
       setCurrentCardIndex(0);
+      setIsFlipped(false);
     }
   };
 
@@ -273,171 +257,237 @@ export default function FlashcardsPage() {
           </div>
         </div>
 
-        {/* Deck Selectors */}
-        <div className="mb-6 flex items-center justify-between gap-2">
-          <div className="flex overflow-x-auto pb-2 gap-2.5 flex-1 pr-2">
-            {decks.map((deck) => (
-              <div key={deck.id} className="relative group flex-shrink-0">
-                <button
-                  onClick={() => {
-                    setActiveDeckId(deck.id);
-                    setCurrentCardIndex(0);
-                    setIsFlipped(false);
-                  }}
-                  className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
-                    activeDeckId === deck.id
-                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-950/80/50"
-                      : "bg-white dark:bg-[#161b22] text-slate-700 dark:text-[#cbd5e1] border border-slate-200 dark:border-white/[0.07] hover:bg-slate-100 dark:hover:bg-[#1e2530]"
-                  }`}
+        {/* ── EMPTY STATE WHEN NO DECKS EXIST ── */}
+        {decks.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-slate-300 dark:border-white/[0.12] bg-white/70 dark:bg-[#161b22]/70 p-8 sm:p-14 text-center backdrop-blur-sm shadow-xs mb-6">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/10 to-violet-500/20 text-indigo-600 dark:text-indigo-400">
+              <BookOpen size={32} />
+            </div>
+            <h3 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white mb-2">
+              No Flashcard Decks Yet
+            </h3>
+            <p className="mx-auto max-w-md text-sm text-slate-500 dark:text-[#94a3b8] mb-6">
+              Create a custom study deck in seconds using AI active recall, or build your own flashcards manually.
+            </p>
+
+            {/* Quick-Start Suggested Topics */}
+            <div className="mb-8">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-[#64748b] mb-3">
+                Popular Topics to Generate
+              </p>
+              <div className="flex flex-wrap justify-center gap-2 max-w-xl mx-auto">
+                {POPULAR_TOPICS.map((topic) => (
+                  <button
+                    key={topic}
+                    onClick={() => {
+                      setAiTopic(topic);
+                      setIsGeneratingAi(true);
+                    }}
+                    className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e2530] px-3.5 py-1.5 text-xs font-medium text-slate-700 dark:text-[#cbd5e1] hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:scale-105 transition-all shadow-2xs"
+                  >
+                    {topic}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={() => setIsGeneratingAi(true)}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-950/80 transition-all hover:scale-105 active:scale-95"
+              >
+                <Sparkles size={16} /> Generate Deck with AI
+              </button>
+              <button
+                onClick={() => setIsAddingCard(true)}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e2530] hover:bg-slate-50 dark:hover:bg-[#252d3a] px-5 py-3 text-sm font-semibold text-slate-700 dark:text-[#e2e8f0] transition-all"
+              >
+                <Plus size={16} /> Create Custom Deck
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Deck Selectors */}
+            <div className="mb-6 flex items-center justify-between gap-2">
+              <div className="flex overflow-x-auto pb-2 gap-2.5 flex-1 pr-2">
+                {decks.map((deck) => (
+                  <div key={deck.id} className="relative group flex-shrink-0">
+                    <button
+                      onClick={() => {
+                        setActiveDeckId(deck.id);
+                        setCurrentCardIndex(0);
+                        setIsFlipped(false);
+                      }}
+                      className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
+                        activeDeckId === deck.id
+                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-950/80/50"
+                          : "bg-white dark:bg-[#161b22] text-slate-700 dark:text-[#cbd5e1] border border-slate-200 dark:border-white/[0.07] hover:bg-slate-100 dark:hover:bg-[#1e2530]"
+                      }`}
+                    >
+                      <span>{deck.title}</span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          activeDeckId === deck.id
+                            ? "bg-white/20 text-white"
+                            : "bg-slate-100 dark:bg-[#1e2530] text-slate-500 dark:text-[#94a3b8]"
+                        }`}
+                      >
+                        {deck.cards?.length || 0}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteDeck(deck.id);
+                      }}
+                      className="absolute -top-1.5 -right-1.5 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-sm text-[10px] hover:bg-rose-600 transition-all"
+                      title="Delete Deck"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Flashcard Area */}
+            <div className="mb-6">
+              <div className="mb-2 flex items-center justify-between text-xs text-slate-500 dark:text-[#94a3b8] px-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-700 dark:text-[#cbd5e1]">
+                    {activeDeck?.title || "Study Deck"}
+                  </span>
+                  <span>•</span>
+                  <span>
+                    Card {cards.length > 0 ? currentCardIndex + 1 : 0} of {cards.length}
+                  </span>
+                </div>
+                <span className="italic">Click card to reveal answer</span>
+              </div>
+
+              {cards.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#161b22] p-12 text-center">
+                  <p className="text-base font-semibold text-slate-700 dark:text-[#cbd5e1] mb-2">This deck has no cards yet</p>
+                  <p className="text-xs text-slate-400 dark:text-[#64748b] mb-4">Add your first card or generate more with AI</p>
+                  <button
+                    onClick={() => setIsAddingCard(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-bold text-white shadow-sm"
+                  >
+                    <Plus size={14} /> Add Card
+                  </button>
+                </div>
+              ) : (
+                /* 3D Flip Card */
+                <div
+                  onClick={() => setIsFlipped((p) => !p)}
+                  className="group relative h-80 sm:h-96 w-full cursor-pointer perspective rounded-3xl"
                 >
-                  <span>{deck.title}</span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                      activeDeckId === deck.id
-                        ? "bg-white/20 text-white"
-                        : "bg-slate-100 dark:bg-[#1e2530] text-slate-500 dark:text-[#94a3b8]"
+                  <div
+                    className={`relative h-full w-full rounded-3xl p-8 sm:p-12 shadow-lg border border-slate-200/80 dark:border-white/[0.07] transition-all duration-500 transform-style-3d flex flex-col justify-between ${
+                      isFlipped
+                        ? "bg-gradient-to-br from-indigo-50 via-white to-violet-50 dark:from-[#161b22] dark:via-[#161b22] dark:to-indigo-500/[0.06]"
+                        : "bg-white dark:bg-[#161b22]"
                     }`}
                   >
-                    {deck.cards?.length || 0}
-                  </span>
-                </button>
+                    {/* Card Header Badge */}
+                    <div className="flex items-center justify-between">
+                      <span className="rounded-full bg-indigo-50 dark:bg-indigo-500/[0.15] px-3 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                        {activeDeck?.subject || "Topic"}
+                      </span>
+                      <span className="flex items-center gap-1 text-xs font-medium text-slate-400 dark:text-[#64748b]">
+                        <RotateCw size={12} className={isFlipped ? "rotate-180 transition-transform" : ""} />
+                        {isFlipped ? "Answer" : "Question"}
+                      </span>
+                    </div>
 
-                {decks.length > 1 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteDeck(deck.id);
-                    }}
-                    className="absolute -top-1.5 -right-1.5 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-sm text-[10px] hover:bg-rose-600 transition-all"
-                    title="Delete Deck"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+                    {/* Card Content */}
+                    <div className="my-auto flex flex-col items-center justify-center text-center px-4">
+                      <p className="text-lg sm:text-2xl font-bold leading-relaxed text-slate-800 dark:text-white">
+                        {isFlipped ? currentCard?.back : currentCard?.front}
+                      </p>
+                    </div>
 
-        {/* Flashcard Area */}
-        <div className="mb-6">
-          <div className="mb-2 flex items-center justify-between text-xs text-slate-500 dark:text-[#94a3b8] px-1">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-700 dark:text-[#cbd5e1]">
-                {activeDeck.title}
-              </span>
-              <span>•</span>
-              <span>
-                Card {cards.length > 0 ? currentCardIndex + 1 : 0} of {cards.length}
-              </span>
+                    {/* Card Footer */}
+                    <div className="flex items-center justify-between text-xs text-slate-400 dark:text-[#64748b]">
+                      <span>{isFlipped ? "Flip again for question" : "Tap anywhere to flip"}</span>
+                      {cards.length > 0 && currentCard?.id && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCard(currentCard.id);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/[0.1] transition-colors"
+                          title="Delete this card"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            <span className="italic">Click card to reveal answer</span>
-          </div>
 
-          {/* 3D Flip Card */}
-          <div
-            onClick={() => setIsFlipped((p) => !p)}
-            className="group relative h-80 sm:h-96 w-full cursor-pointer perspective rounded-3xl"
-          >
-            <div
-              className={`relative h-full w-full rounded-3xl p-8 sm:p-12 shadow-lg border border-slate-200/80 dark:border-white/[0.07] transition-all duration-500 transform-style-3d flex flex-col justify-between ${
-                isFlipped
-                  ? "bg-gradient-to-br from-indigo-50 via-white to-violet-50 dark:from-[#161b22] dark:via-[#161b22] dark:to-indigo-500/[0.06]"
-                  : "bg-white dark:bg-[#161b22]"
-              }`}
-            >
-              {/* Card Header Badge */}
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-indigo-50 dark:bg-indigo-500/[0.15] px-3 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                  {activeDeck.subject || "Topic"}
-                </span>
-                <span className="flex items-center gap-1 text-xs font-medium text-slate-400 dark:text-[#64748b]">
-                  <RotateCw size={12} className={isFlipped ? "rotate-180 transition-transform" : ""} />
-                  {isFlipped ? "Answer" : "Question"}
-                </span>
-              </div>
-
-              {/* Card Content */}
-              <div className="my-auto flex flex-col items-center justify-center text-center px-4">
-                <p className="text-lg sm:text-2xl font-bold leading-relaxed text-slate-800 dark:text-white">
-                  {isFlipped ? currentCard.back : currentCard.front}
-                </p>
-              </div>
-
-              {/* Card Footer */}
-              <div className="flex items-center justify-between text-xs text-slate-400 dark:text-[#64748b]">
-                <span>{isFlipped ? "Flip again for question" : "Tap anywhere to flip"}</span>
-                {cards.length > 0 && currentCard.id && (
+            {/* Card Controls */}
+            {cards.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl bg-white dark:bg-[#161b22] p-4 border border-slate-100 dark:border-white/[0.07] shadow-sm mb-6">
+                {/* Navigation */}
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteCard(currentCard.id);
-                    }}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/[0.1] transition-colors"
-                    title="Delete this card"
+                    onClick={handlePrev}
+                    disabled={cards.length <= 1}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-[#1e2530] text-slate-700 dark:text-[#cbd5e1] hover:bg-slate-200 dark:hover:bg-[#252d3a] disabled:opacity-40 transition-colors"
+                    title="Previous Card"
                   >
-                    <Trash2 size={15} />
+                    <ChevronLeft size={20} />
                   </button>
-                )}
+                  <button
+                    onClick={handleNext}
+                    disabled={cards.length <= 1}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-[#1e2530] text-slate-700 dark:text-[#cbd5e1] hover:bg-slate-200 dark:hover:bg-[#252d3a] disabled:opacity-40 transition-colors"
+                    title="Next Card"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                  <button
+                    onClick={handleShuffle}
+                    disabled={cards.length <= 1}
+                    className="flex items-center gap-1.5 rounded-xl bg-slate-100 dark:bg-[#1e2530] px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-[#cbd5e1] hover:bg-slate-200 dark:hover:bg-[#252d3a] disabled:opacity-40 transition-colors"
+                  >
+                    <Shuffle size={14} /> Shuffle
+                  </button>
+                </div>
+
+                {/* Self-Rating (Active Recall) */}
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    onClick={() => handleRate("hard")}
+                    disabled={cards.length === 0}
+                    className="flex-1 sm:flex-none rounded-xl bg-red-50 dark:bg-red-500/[0.1] hover:bg-red-100 dark:hover:bg-red-500/[0.15] text-red-600 dark:text-red-400 px-4 py-2 text-xs font-bold transition-colors disabled:opacity-50"
+                  >
+                    Hard (Review Soon)
+                  </button>
+                  <button
+                    onClick={() => handleRate("good")}
+                    disabled={cards.length === 0}
+                    className="flex-1 sm:flex-none rounded-xl bg-amber-50 dark:bg-amber-500/[0.1] hover:bg-amber-100 dark:hover:bg-amber-500/[0.15] text-amber-600 dark:text-amber-400 px-4 py-2 text-xs font-bold transition-colors disabled:opacity-50"
+                  >
+                    Good
+                  </button>
+                  <button
+                    onClick={() => handleRate("easy")}
+                    disabled={cards.length === 0}
+                    className="flex-1 sm:flex-none rounded-xl bg-emerald-50 dark:bg-emerald-500/[0.1] hover:bg-emerald-100 dark:hover:bg-emerald-500/[0.15] text-emerald-600 dark:text-emerald-400 px-4 py-2 text-xs font-bold transition-colors disabled:opacity-50"
+                  >
+                    Easy (Mastered)
+                  </button>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Card Controls */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl bg-white dark:bg-[#161b22] p-4 border border-slate-100 dark:border-white/[0.07] shadow-sm">
-          {/* Navigation */}
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
-            <button
-              onClick={handlePrev}
-              disabled={cards.length <= 1}
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-[#1e2530] text-slate-700 dark:text-[#cbd5e1] hover:bg-slate-200 dark:hover:bg-[#252d3a] disabled:opacity-40 transition-colors"
-              title="Previous Card"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <button
-              onClick={handleNext}
-              disabled={cards.length <= 1}
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-[#1e2530] text-slate-700 dark:text-[#cbd5e1] hover:bg-slate-200 dark:hover:bg-[#252d3a] disabled:opacity-40 transition-colors"
-              title="Next Card"
-            >
-              <ChevronRight size={20} />
-            </button>
-            <button
-              onClick={handleShuffle}
-              disabled={cards.length <= 1}
-              className="flex items-center gap-1.5 rounded-xl bg-slate-100 dark:bg-[#1e2530] px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-[#cbd5e1] hover:bg-slate-200 dark:hover:bg-[#252d3a] disabled:opacity-40 transition-colors"
-            >
-              <Shuffle size={14} /> Shuffle
-            </button>
-          </div>
-
-          {/* Self-Rating (Active Recall) */}
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button
-              onClick={() => handleRate("hard")}
-              disabled={cards.length === 0}
-              className="flex-1 sm:flex-none rounded-xl bg-red-50 dark:bg-red-500/[0.1] hover:bg-red-100 dark:hover:bg-red-500/[0.15] text-red-600 dark:text-red-400 px-4 py-2 text-xs font-bold transition-colors disabled:opacity-50"
-            >
-              Hard (Review Soon)
-            </button>
-            <button
-              onClick={() => handleRate("good")}
-              disabled={cards.length === 0}
-              className="flex-1 sm:flex-none rounded-xl bg-amber-50 dark:bg-amber-500/[0.1] hover:bg-amber-100 dark:hover:bg-amber-500/[0.15] text-amber-600 dark:text-amber-400 px-4 py-2 text-xs font-bold transition-colors disabled:opacity-50"
-            >
-              Good
-            </button>
-            <button
-              onClick={() => handleRate("easy")}
-              disabled={cards.length === 0}
-              className="flex-1 sm:flex-none rounded-xl bg-emerald-50 dark:bg-emerald-500/[0.1] hover:bg-emerald-100 dark:hover:bg-emerald-500/[0.15] text-emerald-600 dark:text-emerald-400 px-4 py-2 text-xs font-bold transition-colors disabled:opacity-50"
-            >
-              Easy (Mastered)
-            </button>
-          </div>
-        </div>
+            )}
+          </>
+        )}
 
         {/* ── AI FLASHCARD GENERATOR MODAL ── */}
         {isGeneratingAi && (

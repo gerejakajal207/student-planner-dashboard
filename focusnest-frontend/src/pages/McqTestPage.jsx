@@ -12,50 +12,6 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 
-const DEFAULT_QUIZZES = [
-  {
-    id: "cs-default",
-    title: "Data Structures & CS Foundations",
-    subject: "Computer Science",
-    difficulty: "Medium",
-    questions: [
-      {
-        id: 1,
-        question: "Which data structure follows the Last-In-First-Out (LIFO) principle?",
-        options: ["Queue", "Stack", "Binary Search Tree", "Linked List"],
-        correct: 1,
-        explanation: "A Stack adds and removes elements from the same end (the top), adhering to LIFO.",
-      },
-      {
-        id: 2,
-        question: "What is the worst-case lookup time in a Hash Table with high collision rate?",
-        options: ["O(1)", "O(log n)", "O(n)", "O(n log n)"],
-        correct: 2,
-        explanation: "In the worst case (all keys collide into the same bucket/chain), lookup degrades to linear time O(n).",
-      },
-      {
-        id: 3,
-        question: "Which sorting algorithm is guaranteed to have O(n log n) worst-case time complexity?",
-        options: ["Bubble Sort", "Quick Sort", "Merge Sort", "Insertion Sort"],
-        correct: 2,
-        explanation: "Merge Sort consistently divides the array in half and merges them in linear time, guaranteeing O(n log n).",
-      },
-      {
-        id: 4,
-        question: "What does the 'P vs NP' problem primarily investigate?",
-        options: [
-          "Whether every problem whose solution can be verified quickly can also be solved quickly",
-          "Whether quantum computers can break RSA encryption",
-          "The execution speed difference between Python and C++",
-          "The maximum size limit of neural network parameters",
-        ],
-        correct: 0,
-        explanation: "P is the set of problems solvable in polynomial time, while NP problems are verifiable in polynomial time.",
-      },
-    ],
-  },
-];
-
 const SUGGESTED_TOPICS = [
   "Operating Systems",
   "Organic Chemistry",
@@ -69,14 +25,29 @@ export default function McqTestPage() {
   const [quizzes, setQuizzes] = useState(() => {
     try {
       const saved = localStorage.getItem("focusnest_mcq_quizzes");
-      return saved ? JSON.parse(saved) : DEFAULT_QUIZZES;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Exclude old hardcoded default quiz if present
+        return parsed.filter((q) => q.id !== "cs-default");
+      }
+      return [];
     } catch {
-      return DEFAULT_QUIZZES;
+      return [];
     }
   });
 
   const [selectedQuizId, setSelectedQuizId] = useState(() => {
-    return quizzes[0]?.id || "cs-default";
+    try {
+      const saved = localStorage.getItem("focusnest_mcq_quizzes");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const userQuizzes = parsed.filter((q) => q.id !== "cs-default");
+        return userQuizzes[0]?.id || null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   });
 
   const [currentQIndex, setCurrentQIndex] = useState(0);
@@ -103,20 +74,9 @@ export default function McqTestPage() {
     }
   }, [quizzes]);
 
-  const activeQuiz = quizzes.find((q) => q.id === selectedQuizId) || quizzes[0] || {
-    id: "empty",
-    title: "No Quiz",
-    subject: "General",
-    questions: [],
-  };
-
-  const questions = activeQuiz.questions || [];
-  const currentQ = questions[currentQIndex] || {
-    question: "No questions available. Click 'Generate AI Quiz' above to get started!",
-    options: ["Option A", "Option B", "Option C", "Option D"],
-    correct: 0,
-    explanation: "Click generate to test your knowledge on any subject.",
-  };
+  const activeQuiz = quizzes.find((q) => q.id === selectedQuizId) || quizzes[0] || null;
+  const questions = activeQuiz?.questions || [];
+  const currentQ = questions[currentQIndex] || null;
 
   const handleSelectOption = (optIndex) => {
     if (isSubmitted || selectedAnswers[currentQIndex] !== undefined) return;
@@ -144,14 +104,10 @@ export default function McqTestPage() {
   };
 
   const handleDeleteQuiz = (quizId) => {
-    if (quizzes.length <= 1) {
-      alert("You need at least one quiz in your list.");
-      return;
-    }
     const remaining = quizzes.filter((q) => q.id !== quizId);
     setQuizzes(remaining);
     if (selectedQuizId === quizId) {
-      setSelectedQuizId(remaining[0].id);
+      setSelectedQuizId(remaining[0]?.id || null);
       handleRestart();
     }
   };
@@ -251,214 +207,269 @@ export default function McqTestPage() {
           </div>
         </div>
 
-        {/* Quiz Topic Selector Bar */}
-        <div className="mb-6 flex overflow-x-auto pb-2 gap-2.5">
-          {quizzes.map((quiz) => (
-            <div key={quiz.id} className="relative group flex-shrink-0">
-              <button
-                onClick={() => {
-                  setSelectedQuizId(quiz.id);
-                  handleRestart();
-                }}
-                className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
-                  selectedQuizId === quiz.id
-                    ? "bg-violet-600 text-white shadow-md shadow-violet-200 dark:shadow-violet-950/50"
-                    : "bg-white dark:bg-[#161b22] text-slate-700 dark:text-[#cbd5e1] border border-slate-200 dark:border-white/[0.07] hover:bg-slate-100 dark:hover:bg-[#1e2530]"
-                }`}
-              >
-                <span>{quiz.title}</span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                    selectedQuizId === quiz.id
-                      ? "bg-white/20 text-white"
-                      : "bg-slate-100 dark:bg-[#1e2530] text-slate-500 dark:text-[#94a3b8]"
-                  }`}
-                >
-                  {quiz.questions?.length || 0} Qs
-                </span>
-              </button>
-
-              {quizzes.length > 1 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteQuiz(quiz.id);
-                  }}
-                  className="absolute -top-1.5 -right-1.5 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-sm text-[10px] hover:bg-rose-600 transition-all"
-                  title="Delete Quiz"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* QUIZ INTERFACE */}
-        {!isSubmitted ? (
-          <div className="rounded-3xl bg-white dark:bg-[#161b22] p-6 sm:p-10 shadow-lg border border-slate-100 dark:border-white/[0.07] transition-all">
-            {/* Top Bar: Progress & Counter */}
-            <div className="mb-6 flex items-center justify-between">
-              <span className="rounded-full bg-violet-50 dark:bg-violet-500/[0.15] px-3 py-1 text-xs font-bold text-violet-600 dark:text-violet-400">
-                {activeQuiz.subject} · Question {currentQIndex + 1} of {questions.length}
-              </span>
-              <span className="text-xs font-semibold text-slate-400 dark:text-[#64748b]">
-                {questions.length > 0
-                  ? Math.round(((currentQIndex + 1) / questions.length) * 100)
-                  : 0}% Complete
-              </span>
+        {quizzes.length === 0 ? (
+          /* EMPTY STATE */
+          <div className="rounded-3xl bg-white dark:bg-[#161b22] p-8 sm:p-14 shadow-lg border border-slate-100 dark:border-white/[0.07] text-center transition-all">
+            <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-xl shadow-violet-200 dark:shadow-violet-950">
+              <Brain size={40} />
             </div>
 
-            {/* Progress Bar */}
-            <div className="mb-8 h-1.5 w-full rounded-full bg-slate-100 dark:bg-[#1e2530] overflow-hidden">
-              <div
-                className="h-full rounded-full bg-violet-600 transition-all duration-300"
-                style={{
-                  width: `${questions.length > 0 ? ((currentQIndex + 1) / questions.length) * 100 : 0}%`,
-                }}
-              />
-            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 dark:bg-violet-500/[0.12] px-3 py-1 text-xs font-bold text-violet-600 dark:text-violet-400 mb-3">
+              <Sparkles size={13} /> AI Practice Quizzes
+            </span>
 
-            {/* Question Text */}
-            <h2 className="mb-8 text-lg sm:text-xl font-bold leading-relaxed text-slate-800 dark:text-white">
-              {currentQ.question}
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white">
+              No Practice Quizzes Yet
             </h2>
-
-            {/* Options List */}
-            <div className="space-y-3 mb-8">
-              {currentQ.options.map((option, idx) => {
-                const isSelected = selectedAnswers[currentQIndex] === idx;
-                const isCorrect = idx === currentQ.correct;
-                const hasAnswered = selectedAnswers[currentQIndex] !== undefined;
-
-                let optionStyles =
-                  "border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#1e2530]/60 hover:bg-slate-100 dark:hover:bg-[#1e2530] text-slate-700 dark:text-[#e2e8f0]";
-
-                if (hasAnswered) {
-                  if (isCorrect) {
-                    optionStyles =
-                      "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/[0.1] text-emerald-700 dark:text-emerald-400 font-semibold";
-                  } else if (isSelected && !isCorrect) {
-                    optionStyles =
-                      "border-rose-500 bg-rose-50 dark:bg-rose-500/[0.1] text-rose-700 dark:text-rose-400";
-                  }
-                }
-
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => handleSelectOption(idx)}
-                    disabled={hasAnswered}
-                    className={`flex w-full items-center justify-between rounded-2xl border-2 p-4 text-left text-sm sm:text-base transition-all ${optionStyles} ${
-                      hasAnswered ? "cursor-default" : "cursor-pointer"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white dark:bg-[#252d3a] font-bold text-xs shadow-sm">
-                        {String.fromCharCode(65 + idx)}
-                      </span>
-                      <span>{option}</span>
-                    </div>
-
-                    {hasAnswered && isCorrect && (
-                      <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
-                    )}
-                    {hasAnswered && isSelected && !isCorrect && (
-                      <XCircle className="h-5 w-5 text-rose-500 flex-shrink-0" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Explanation Note */}
-            {showExplanation && (
-              <div className="mb-6 rounded-2xl bg-indigo-50 dark:bg-indigo-500/[0.12] border border-indigo-100 dark:border-indigo-500/20/40 p-4 text-xs sm:text-sm text-indigo-900 dark:text-indigo-400 animate-fadeIn">
-                <p className="font-bold mb-1 flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400">
-                  <HelpCircle size={15} /> Explanation
-                </p>
-                <p className="leading-relaxed">{currentQ.explanation}</p>
-              </div>
-            )}
-
-            {/* Bottom Actions */}
-            <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-white/[0.07]">
-              <span className="text-xs text-slate-400 dark:text-[#64748b]">
-                {selectedAnswers[currentQIndex] === undefined
-                  ? "Select an option to see feedback"
-                  : "Answer recorded"}
-              </span>
-
-              <button
-                onClick={handleNext}
-                disabled={selectedAnswers[currentQIndex] === undefined}
-                className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-200 dark:shadow-violet-950/50 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {currentQIndex < questions.length - 1 ? (
-                  <>
-                    Next Question <ArrowRight size={16} />
-                  </>
-                ) : (
-                  <>
-                    View Results <Trophy size={16} />
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        ) : (
-          /* RESULT SCREEN */
-          <div className="rounded-3xl bg-white dark:bg-[#161b22] p-8 sm:p-12 shadow-xl border border-slate-100 dark:border-white/[0.07] text-center transition-all">
-            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-200 dark:shadow-violet-950">
-              <Trophy size={36} />
-            </div>
-
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white">
-              Quiz Completed!
-            </h2>
-            <p className="mt-1 text-sm text-slate-500 dark:text-[#94a3b8]">
-              Here is how you performed on <span className="font-semibold text-violet-600">{activeQuiz.title}</span>
+            <p className="mt-2 text-sm text-slate-500 dark:text-[#94a3b8] max-w-md mx-auto">
+              Create instant, exam-style multiple choice quizzes on any subject using Gemini AI with comprehensive explanations.
             </p>
 
-            <div className="my-8 flex justify-center gap-6">
-              <div className="rounded-2xl bg-slate-50 dark:bg-[#1e2530]/80 p-5 w-36">
-                <p className="text-xs font-semibold text-slate-400">Accuracy</p>
-                <p className="text-3xl font-black text-violet-600 dark:text-violet-400 mt-1">{percentage}%</p>
-              </div>
-              <div className="rounded-2xl bg-slate-50 dark:bg-[#1e2530]/80 p-5 w-36">
-                <p className="text-xs font-semibold text-slate-400">Score</p>
-                <p className="text-3xl font-black text-slate-800 dark:text-white mt-1">
-                  {score} / {questions.length}
-                </p>
+            {/* Quick suggestions */}
+            <div className="mt-6 mb-8">
+              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
+                Try popular topics
+              </p>
+              <div className="flex flex-wrap justify-center gap-2 max-w-xl mx-auto">
+                {[
+                  "Data Structures & Algorithms",
+                  "Machine Learning & AI",
+                  "Cell Biology & Genetics",
+                  "Calculus & Derivatives",
+                  "World History & Revolutions",
+                  "Microeconomics Principles",
+                ].map((topic) => (
+                  <button
+                    key={topic}
+                    onClick={() => {
+                      setAiTopic(topic);
+                      setIsGeneratingAi(true);
+                    }}
+                    className="rounded-full bg-slate-100 dark:bg-[#1e2530] hover:bg-violet-100 dark:hover:bg-violet-900/30 text-slate-700 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 px-3.5 py-1.5 text-xs font-semibold transition-all border border-transparent hover:border-violet-300 dark:hover:border-violet-700/50"
+                  >
+                    + {topic}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Performance message */}
-            <div className="mb-8 inline-block rounded-2xl bg-slate-50 dark:bg-[#1e2530] px-6 py-3 text-sm text-slate-700 dark:text-[#cbd5e1]">
-              {percentage >= 80 ? (
-                <span>🎉 <strong>Outstanding!</strong> You've mastered this topic!</span>
-              ) : percentage >= 50 ? (
-                <span>👍 <strong>Good job!</strong> Review the explanations to achieve perfection.</span>
-              ) : (
-                <span>📚 <strong>Keep practicing!</strong> Try generating a flashcard deck on this topic.</span>
-              )}
-            </div>
-
-            <div className="flex flex-wrap justify-center gap-3">
-              <button
-                onClick={handleRestart}
-                className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-violet-200 dark:shadow-violet-950/50 transition-all active:scale-95"
-              >
-                <RotateCcw size={16} /> Retake Quiz
-              </button>
-              <button
-                onClick={() => setIsGeneratingAi(true)}
-                className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-[#1e2530] hover:bg-slate-200 dark:hover:bg-[#252d3a] px-6 py-3 text-sm font-semibold text-slate-700 dark:text-[#e2e8f0] transition-all active:scale-95"
-              >
-                <Sparkles size={16} /> Generate Another Topic
-              </button>
-            </div>
+            <button
+              onClick={() => setIsGeneratingAi(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-200 dark:shadow-violet-950 transition-all active:scale-95"
+            >
+              <Sparkles size={18} /> Generate Your First Quiz
+            </button>
           </div>
+        ) : (
+          <>
+            {/* Quiz Topic Selector Bar */}
+            <div className="mb-6 flex overflow-x-auto pb-2 gap-2.5">
+              {quizzes.map((quiz) => (
+                <div key={quiz.id} className="relative group flex-shrink-0">
+                  <button
+                    onClick={() => {
+                      setSelectedQuizId(quiz.id);
+                      handleRestart();
+                    }}
+                    className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
+                      selectedQuizId === quiz.id
+                        ? "bg-violet-600 text-white shadow-md shadow-violet-200 dark:shadow-violet-950/50"
+                        : "bg-white dark:bg-[#161b22] text-slate-700 dark:text-[#cbd5e1] border border-slate-200 dark:border-white/[0.07] hover:bg-slate-100 dark:hover:bg-[#1e2530]"
+                    }`}
+                  >
+                    <span>{quiz.title}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        selectedQuizId === quiz.id
+                          ? "bg-white/20 text-white"
+                          : "bg-slate-100 dark:bg-[#1e2530] text-slate-500 dark:text-[#94a3b8]"
+                      }`}
+                    >
+                      {quiz.questions?.length || 0} Qs
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteQuiz(quiz.id);
+                    }}
+                    className="absolute -top-1.5 -right-1.5 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-sm text-[10px] hover:bg-rose-600 transition-all"
+                    title="Delete Quiz"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* QUIZ INTERFACE */}
+            {!isSubmitted ? (
+              <div className="rounded-3xl bg-white dark:bg-[#161b22] p-6 sm:p-10 shadow-lg border border-slate-100 dark:border-white/[0.07] transition-all">
+                {/* Top Bar: Progress & Counter */}
+                <div className="mb-6 flex items-center justify-between">
+                  <span className="rounded-full bg-violet-50 dark:bg-violet-500/[0.15] px-3 py-1 text-xs font-bold text-violet-600 dark:text-violet-400">
+                    {activeQuiz?.subject || "General"} · Question {currentQIndex + 1} of {questions.length}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-400 dark:text-[#64748b]">
+                    {questions.length > 0
+                      ? Math.round(((currentQIndex + 1) / questions.length) * 100)
+                      : 0}% Complete
+                  </span>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="mb-8 h-1.5 w-full rounded-full bg-slate-100 dark:bg-[#1e2530] overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-violet-600 transition-all duration-300"
+                    style={{
+                      width: `${questions.length > 0 ? ((currentQIndex + 1) / questions.length) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
+
+                {/* Question Text */}
+                <h2 className="mb-8 text-lg sm:text-xl font-bold leading-relaxed text-slate-800 dark:text-white">
+                  {currentQ?.question}
+                </h2>
+
+                {/* Options List */}
+                <div className="space-y-3 mb-8">
+                  {currentQ?.options?.map((option, idx) => {
+                    const isSelected = selectedAnswers[currentQIndex] === idx;
+                    const isCorrect = idx === currentQ.correct;
+                    const hasAnswered = selectedAnswers[currentQIndex] !== undefined;
+
+                    let optionStyles =
+                      "border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#1e2530]/60 hover:bg-slate-100 dark:hover:bg-[#1e2530] text-slate-700 dark:text-[#e2e8f0]";
+
+                    if (hasAnswered) {
+                      if (isCorrect) {
+                        optionStyles =
+                          "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/[0.1] text-emerald-700 dark:text-emerald-400 font-semibold";
+                      } else if (isSelected && !isCorrect) {
+                        optionStyles =
+                          "border-rose-500 bg-rose-50 dark:bg-rose-500/[0.1] text-rose-700 dark:text-rose-400";
+                      }
+                    }
+
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => handleSelectOption(idx)}
+                        disabled={hasAnswered}
+                        className={`flex w-full items-center justify-between rounded-2xl border-2 p-4 text-left text-sm sm:text-base transition-all ${optionStyles} ${
+                          hasAnswered ? "cursor-default" : "cursor-pointer"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white dark:bg-[#252d3a] font-bold text-xs shadow-sm">
+                            {String.fromCharCode(65 + idx)}
+                          </span>
+                          <span>{option}</span>
+                        </div>
+
+                        {hasAnswered && isCorrect && (
+                          <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+                        )}
+                        {hasAnswered && isSelected && !isCorrect && (
+                          <XCircle className="h-5 w-5 text-rose-500 flex-shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Explanation Note */}
+                {showExplanation && currentQ?.explanation && (
+                  <div className="mb-6 rounded-2xl bg-indigo-50 dark:bg-indigo-500/[0.12] border border-indigo-100 dark:border-indigo-500/20 p-4 text-xs sm:text-sm text-indigo-900 dark:text-indigo-400 animate-fadeIn">
+                    <p className="font-bold mb-1 flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400">
+                      <HelpCircle size={15} /> Explanation
+                    </p>
+                    <p className="leading-relaxed">{currentQ.explanation}</p>
+                  </div>
+                )}
+
+                {/* Bottom Actions */}
+                <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-white/[0.07]">
+                  <span className="text-xs text-slate-400 dark:text-[#64748b]">
+                    {selectedAnswers[currentQIndex] === undefined
+                      ? "Select an option to see feedback"
+                      : "Answer recorded"}
+                  </span>
+
+                  <button
+                    onClick={handleNext}
+                    disabled={selectedAnswers[currentQIndex] === undefined}
+                    className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-200 dark:shadow-violet-950/50 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {currentQIndex < questions.length - 1 ? (
+                      <>
+                        Next Question <ArrowRight size={16} />
+                      </>
+                    ) : (
+                      <>
+                        View Results <Trophy size={16} />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* RESULT SCREEN */
+              <div className="rounded-3xl bg-white dark:bg-[#161b22] p-8 sm:p-12 shadow-xl border border-slate-100 dark:border-white/[0.07] text-center transition-all">
+                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-200 dark:shadow-violet-950">
+                  <Trophy size={36} />
+                </div>
+
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white">
+                  Quiz Completed!
+                </h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-[#94a3b8]">
+                  Here is how you performed on <span className="font-semibold text-violet-600">{activeQuiz?.title}</span>
+                </p>
+
+                <div className="my-8 flex justify-center gap-6">
+                  <div className="rounded-2xl bg-slate-50 dark:bg-[#1e2530]/80 p-5 w-36">
+                    <p className="text-xs font-semibold text-slate-400">Accuracy</p>
+                    <p className="text-3xl font-black text-violet-600 dark:text-violet-400 mt-1">{percentage}%</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 dark:bg-[#1e2530]/80 p-5 w-36">
+                    <p className="text-xs font-semibold text-slate-400">Score</p>
+                    <p className="text-3xl font-black text-slate-800 dark:text-white mt-1">
+                      {score} / {questions.length}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Performance message */}
+                <div className="mb-8 inline-block rounded-2xl bg-slate-50 dark:bg-[#1e2530] px-6 py-3 text-sm text-slate-700 dark:text-[#cbd5e1]">
+                  {percentage >= 80 ? (
+                    <span>🎉 <strong>Outstanding!</strong> You've mastered this topic!</span>
+                  ) : percentage >= 50 ? (
+                    <span>👍 <strong>Good job!</strong> Review the explanations to achieve perfection.</span>
+                  ) : (
+                    <span>📚 <strong>Keep practicing!</strong> Try generating a flashcard deck on this topic.</span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap justify-center gap-3">
+                  <button
+                    onClick={handleRestart}
+                    className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-violet-200 dark:shadow-violet-950/50 transition-all active:scale-95"
+                  >
+                    <RotateCcw size={16} /> Retake Quiz
+                  </button>
+                  <button
+                    onClick={() => setIsGeneratingAi(true)}
+                    className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-[#1e2530] hover:bg-slate-200 dark:hover:bg-[#252d3a] px-6 py-3 text-sm font-semibold text-slate-700 dark:text-[#e2e8f0] transition-all active:scale-95"
+                  >
+                    <Sparkles size={16} /> Generate Another Topic
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* ── AI QUIZ GENERATOR MODAL ── */}
