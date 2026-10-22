@@ -10,6 +10,8 @@ import {
   Sparkles,
   X,
   FolderPlus,
+  ArrowLeft,
+  Play,
 } from "lucide-react";
 import { api } from "../api";
 
@@ -39,21 +41,7 @@ export default function FlashcardsPage() {
     }
   });
 
-  const [activeDeckId, setActiveDeckId] = useState(() => {
-    try {
-      const saved = localStorage.getItem("focusnest_flashcard_decks");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const userDecks = parsed.filter(
-          (d) => !["cs-default", "math-default", "bio-default"].includes(d.id)
-        );
-        return userDecks[0]?.id || null;
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  });
+  const [activeDeckId, setActiveDeckId] = useState(null);
 
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -90,10 +78,6 @@ export default function FlashcardsPage() {
       .then(async (cloudDecks) => {
         if (Array.isArray(cloudDecks) && cloudDecks.length > 0) {
           setDecks(cloudDecks);
-          setActiveDeckId((prev) => {
-            if (prev && cloudDecks.some((d) => String(d.id) === String(prev))) return prev;
-            return cloudDecks[0]?.id || null;
-          });
         } else {
           // Cloud has no decks yet. Check if there are local decks to migrate to cloud
           const saved = localStorage.getItem("focusnest_flashcard_decks");
@@ -119,7 +103,6 @@ export default function FlashcardsPage() {
                 }
                 if (migrated.length > 0) {
                   setDecks(migrated);
-                  setActiveDeckId(migrated[0].id);
                 }
               }
             } catch (e) {
@@ -142,9 +125,17 @@ export default function FlashcardsPage() {
     }
   }, [decks]);
 
-  const activeDeck = decks.find((d) => String(d.id) === String(activeDeckId)) || decks[0] || null;
+  const activeDeck = activeDeckId
+    ? decks.find((d) => String(d.id) === String(activeDeckId)) || null
+    : null;
   const cards = activeDeck?.cards || [];
   const currentCard = cards[currentCardIndex] || null;
+
+  const handleStartStudy = (deckId) => {
+    setActiveDeckId(deckId);
+    setCurrentCardIndex(0);
+    setIsFlipped(false);
+  };
 
   const handleNext = () => {
     if (cards.length <= 1) return;
@@ -415,7 +406,7 @@ export default function FlashcardsPage() {
             >
               <FolderPlus size={16} /> New Deck
             </button>
-            {decks.length > 0 && (
+            {activeDeck && (
               <button
                 onClick={() => setIsAddingCard(true)}
                 className="flex items-center gap-2 rounded-xl bg-white dark:bg-[#161b22] hover:bg-slate-100 dark:hover:bg-[#1e2530] border border-slate-200 dark:border-white/[0.07] px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-[#e2e8f0] shadow-sm transition-all active:scale-95"
@@ -426,103 +417,171 @@ export default function FlashcardsPage() {
           </div>
         </div>
 
-        {/* ── EMPTY STATE WHEN NO DECKS EXIST ── */}
-        {decks.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-slate-300 dark:border-white/[0.12] bg-white/70 dark:bg-[#161b22]/70 p-8 sm:p-14 text-center backdrop-blur-sm shadow-xs mb-6">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/10 to-violet-500/20 text-indigo-600 dark:text-indigo-400">
-              <BookOpen size={32} />
-            </div>
-            <h3 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white mb-2">
-              No Flashcard Decks Yet
-            </h3>
-            <p className="mx-auto max-w-md text-sm text-slate-500 dark:text-[#94a3b8] mb-6">
-              Create a custom study deck in seconds using AI active recall, or build your own flashcards manually.
-            </p>
-
-            {/* Quick-Start Suggested Topics */}
-            <div className="mb-8">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-[#64748b] mb-3">
-                Popular Topics to Generate
+        {/* ── OVERVIEW OR STUDY MODE ── */}
+        {!activeDeck ? (
+          decks.length === 0 ? (
+            /* ── EMPTY STATE WHEN NO DECKS EXIST ── */
+            <div className="rounded-3xl border border-dashed border-slate-300 dark:border-white/[0.12] bg-white/70 dark:bg-[#161b22]/70 p-8 sm:p-14 text-center backdrop-blur-sm shadow-xs mb-6">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/10 to-violet-500/20 text-indigo-600 dark:text-indigo-400">
+                <BookOpen size={32} />
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white mb-2">
+                No Flashcard Decks Yet
+              </h3>
+              <p className="mx-auto max-w-md text-sm text-slate-500 dark:text-[#94a3b8] mb-6">
+                Create a custom study deck in seconds using AI active recall, or build your own flashcards manually.
               </p>
-              <div className="flex flex-wrap justify-center gap-2 max-w-xl mx-auto">
-                {POPULAR_TOPICS.map((topic) => (
-                  <button
-                    key={topic}
-                    onClick={() => {
-                      setAiTopic(topic);
-                      setIsGeneratingAi(true);
-                    }}
-                    className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e2530] px-3.5 py-1.5 text-xs font-medium text-slate-700 dark:text-[#cbd5e1] hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:scale-105 transition-all shadow-2xs"
-                  >
-                    {topic}
-                  </button>
-                ))}
+
+              {/* Quick-Start Suggested Topics */}
+              <div className="mb-8">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-[#64748b] mb-3">
+                  Popular Topics to Generate
+                </p>
+                <div className="flex flex-wrap justify-center gap-2 max-w-xl mx-auto">
+                  {POPULAR_TOPICS.map((topic) => (
+                    <button
+                      key={topic}
+                      onClick={() => {
+                        setAiTopic(topic);
+                        setIsGeneratingAi(true);
+                      }}
+                      className="rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e2530] px-3.5 py-1.5 text-xs font-medium text-slate-700 dark:text-[#cbd5e1] hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:scale-105 transition-all shadow-2xs"
+                    >
+                      {topic}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  onClick={() => setIsGeneratingAi(true)}
+                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-950/80 transition-all hover:scale-105 active:scale-95"
+                >
+                  <Sparkles size={16} /> Generate Deck with AI
+                </button>
+                <button
+                  onClick={() => setIsCreatingDeck(true)}
+                  className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e2530] hover:bg-slate-50 dark:hover:bg-[#252d3a] px-5 py-3 text-sm font-semibold text-slate-700 dark:text-[#e2e8f0] transition-all"
+                >
+                  <Plus size={16} /> Create Custom Deck
+                </button>
               </div>
             </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Section Header: Decks already made */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">
+                    Your Study Decks
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-[#94a3b8]">
+                    Select any deck to start practicing active recall
+                  </p>
+                </div>
+                <span className="rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-3 py-1 text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                  {decks.length} {decks.length === 1 ? "Deck" : "Decks"}
+                </span>
+              </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <button
-                onClick={() => setIsGeneratingAi(true)}
-                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-950/80 transition-all hover:scale-105 active:scale-95"
-              >
-                <Sparkles size={16} /> Generate Deck with AI
-              </button>
-              <button
-                onClick={() => setIsCreatingDeck(true)}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e2530] hover:bg-slate-50 dark:hover:bg-[#252d3a] px-5 py-3 text-sm font-semibold text-slate-700 dark:text-[#e2e8f0] transition-all"
-              >
-                <Plus size={16} /> Create Custom Deck
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Deck Selectors */}
-            <div className="mb-6 flex items-center justify-between gap-2">
-              <div className="flex overflow-x-auto pb-2 gap-2.5 flex-1 pr-2">
+              {/* Grid of Decks created */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {decks.map((deck) => (
-                  <div key={deck.id} className="relative group flex-shrink-0">
-                    <button
-                      onClick={() => {
-                        setActiveDeckId(deck.id);
-                        setCurrentCardIndex(0);
-                        setIsFlipped(false);
-                      }}
-                      className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
-                        String(activeDeckId) === String(deck.id)
-                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-950/80/50"
-                          : "bg-white dark:bg-[#161b22] text-slate-700 dark:text-[#cbd5e1] border border-slate-200 dark:border-white/[0.07] hover:bg-slate-100 dark:hover:bg-[#1e2530]"
-                      }`}
-                    >
-                      <span>{deck.title}</span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                          String(activeDeckId) === String(deck.id)
-                            ? "bg-white/20 text-white"
-                            : "bg-slate-100 dark:bg-[#1e2530] text-slate-500 dark:text-[#94a3b8]"
-                        }`}
-                      >
-                        {deck.cards?.length || 0}
-                      </span>
-                    </button>
+                  <div
+                    key={deck.id}
+                    className="rounded-2xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#161b22] p-5 shadow-sm hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-500/30 transition-all flex flex-col justify-between group"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2.5">
+                        <span className="rounded-lg bg-indigo-50 dark:bg-indigo-500/[0.12] px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                          {deck.subject || "General"}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-medium text-slate-400 dark:text-[#64748b]">
+                            {deck.difficulty || "Medium"}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteDeck(deck.id);
+                            }}
+                            className="text-slate-400 hover:text-rose-500 p-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                            title="Delete Deck"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <h3 className="font-bold text-base text-slate-800 dark:text-white mb-3 line-clamp-2">
+                        {deck.title}
+                      </h3>
+
+                      <div className="flex items-center gap-2.5 text-xs mb-4 text-slate-500 dark:text-[#94a3b8]">
+                        <BookOpen size={14} />
+                        <span>{deck.cards?.length || 0} Flashcards</span>
+                      </div>
+                    </div>
 
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteDeck(deck.id);
-                      }}
-                      className="absolute -top-1.5 -right-1.5 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-sm text-[10px] hover:bg-rose-600 transition-all"
-                      title="Delete Deck"
+                      onClick={() => handleStartStudy(deck.id)}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs sm:text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all active:scale-[0.98]"
                     >
-                      ×
+                      <Play size={14} /> Study Deck
                     </button>
                   </div>
                 ))}
+              </div>
+
+              {/* Action Banner: Generate New Deck below the list */}
+              <div className="rounded-3xl border border-dashed border-slate-300 dark:border-white/[0.12] bg-gradient-to-br from-indigo-50/60 to-violet-50/60 dark:from-indigo-950/20 dark:to-violet-950/20 p-6 sm:p-8 text-center transition-all">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
+                  <Sparkles size={22} />
+                </div>
+                <h3 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white mb-1">
+                  Create or Generate a Study Deck
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-[#94a3b8] mb-5 max-w-md mx-auto">
+                  Generate tailored active-recall flashcards using AI on any topic, or manually craft your own deck.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    onClick={() => setIsGeneratingAi(true)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 px-6 py-3 text-sm font-bold text-white shadow-md shadow-indigo-200 dark:shadow-indigo-950/80 transition-all hover:scale-105 active:scale-95"
+                  >
+                    <Sparkles size={16} /> Generate with AI
+                  </button>
+                  <button
+                    onClick={() => setIsCreatingDeck(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e2530] hover:bg-slate-50 dark:hover:bg-[#252d3a] px-5 py-3 text-sm font-semibold text-slate-700 dark:text-[#e2e8f0] transition-all"
+                  >
+                    <Plus size={16} /> Create Custom Deck
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        ) : (
+          /* ── ACTIVE STUDY PLAYER ── */
+          <div>
+            {/* Top Bar Navigation */}
+            <div className="mb-4 flex items-center justify-between">
+              <button
+                onClick={() => setActiveDeckId(null)}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#161b22] hover:bg-slate-50 dark:hover:bg-[#1e2530] px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-700 dark:text-[#e2e8f0] shadow-2xs transition-all active:scale-95"
+              >
+                <ArrowLeft size={16} /> Back to All Decks
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500 dark:text-[#94a3b8] hidden sm:inline">
+                  {activeDeck.title}
+                </span>
                 <button
-                  onClick={() => setIsCreatingDeck(true)}
-                  className="flex items-center gap-1.5 rounded-xl border border-dashed border-slate-300 dark:border-white/[0.15] hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 px-3.5 py-2.5 text-xs font-semibold text-slate-500 dark:text-[#94a3b8] transition-all whitespace-nowrap flex-shrink-0"
+                  onClick={() => setIsAddingCard(true)}
+                  className="flex items-center gap-1.5 rounded-xl bg-white dark:bg-[#161b22] hover:bg-slate-50 dark:hover:bg-[#1e2530] border border-slate-200 dark:border-white/[0.07] px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-[#e2e8f0] shadow-2xs transition-all active:scale-95"
                 >
-                  <Plus size={14} /> New Deck
+                  <Plus size={14} /> Add Card
                 </button>
               </div>
             </div>
@@ -661,7 +720,7 @@ export default function FlashcardsPage() {
                 </div>
               </div>
             )}
-          </>
+          </div>
         )}
 
         {/* ── AI FLASHCARD GENERATOR MODAL ── */}
