@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import TaskModal from "../components/TaskModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { useTasks } from "../components/TaskContext";
@@ -10,6 +11,7 @@ const months = [
 ];
 
 export default function CalendarPage() {
+  const navigate = useNavigate();
   const { tasks: events, addTask, editTask, deleteTask } = useTasks();
 
   const today = new Date();
@@ -242,29 +244,68 @@ export default function CalendarPage() {
               {section.data.length === 0 ? (
                 <p className="text-xs text-slate-400 dark:text-[#64748b] py-4 text-center">No tasks in this category 🎉</p>
               ) : (
-                <ul className="space-y-2 max-h-48 overflow-y-auto">
+                <ul className="space-y-3 max-h-80 overflow-y-auto pr-1">
                   {section.data.map((event) => (
                     <li
                       key={event.id}
-                      className="group flex items-center justify-between rounded-xl bg-slate-50 dark:bg-[#1e2530]/60 px-3 py-2 text-xs font-medium text-slate-700 dark:text-[#e2e8f0]"
+                      className="group flex flex-col gap-2 rounded-2xl bg-slate-50 dark:bg-[#1e2530]/60 p-3 text-xs font-medium text-slate-700 dark:text-[#e2e8f0] border border-slate-100 dark:border-white/[0.05]"
                     >
-                      <span className="truncate flex-1">
-                        {event.title} · <span className="text-slate-400">{new Date(event.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                      </span>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="truncate font-semibold flex-1 text-slate-800 dark:text-white">
+                          {event.title}
+                        </span>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => handleEditClick(e, event)}
+                            className="p-1 rounded text-slate-400 hover:text-indigo-600 transition-colors"
+                            title="Edit"
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                          <button
+                            onClick={() => setConfirmDelete(event.id)}
+                            className="p-1 rounded text-slate-400 hover:text-rose-500 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 dark:text-[#64748b]">
+                        {event.subject ? (
+                          <span className="rounded bg-indigo-50 dark:bg-indigo-500/10 px-1.5 py-0.5 text-indigo-600 dark:text-indigo-400 font-medium">
+                            {event.subject}
+                          </span>
+                        ) : (
+                          <span>{event.category}</span>
+                        )}
+                        <span>{new Date(event.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                      </div>
+
+                      {/* 1-Click AI Actions on this task */}
+                      <div className="flex flex-col gap-1 pt-1.5 border-t border-slate-200/60 dark:border-white/[0.06]">
                         <button
-                          onClick={(e) => handleEditClick(e, event)}
-                          className="p-1 rounded text-slate-400 hover:text-indigo-600 transition-colors"
-                          title="Edit"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const topic = event.subject && event.title ? `${event.subject}: ${event.title}` : event.title || event.subject;
+                            navigate("/revise", { state: { topic, subject: event.subject || event.title } });
+                          }}
+                          className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-indigo-50/70 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 border border-indigo-200/60 dark:border-indigo-500/20 py-1.5 px-2 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 transition-colors"
                         >
-                          <Edit2 size={12} />
+                          <span>⚡</span> Generate Flashcards for this
                         </button>
                         <button
-                          onClick={() => setConfirmDelete(event.id)}
-                          className="p-1 rounded text-slate-400 hover:text-rose-500 transition-colors"
-                          title="Delete"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const topic = event.subject && event.title ? `${event.subject}: ${event.title}` : event.title || event.subject;
+                            navigate("/mcq-test", { state: { topic, subject: event.subject || event.title } });
+                          }}
+                          className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-violet-50/70 hover:bg-violet-100 dark:bg-violet-500/10 dark:hover:bg-violet-500/20 border border-violet-200/60 dark:border-violet-500/20 py-1.5 px-2 text-[11px] font-bold text-violet-700 dark:text-violet-300 transition-colors"
                         >
-                          <Trash2 size={12} />
+                          <span>⚡</span> Generate Practice Quiz for this
                         </button>
                       </div>
                     </li>

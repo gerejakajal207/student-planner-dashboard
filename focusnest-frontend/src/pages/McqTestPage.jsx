@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Brain,
   CheckCircle2,
@@ -26,6 +27,7 @@ const SUGGESTED_TOPICS = [
 ];
 
 export default function McqTestPage() {
+  const location = useLocation();
   const [quizzes, setQuizzes] = useState(() => {
     try {
       const saved = localStorage.getItem("focusnest_mcq_quizzes");
@@ -59,6 +61,21 @@ export default function McqTestPage() {
   const [aiError, setAiError] = useState("");
   const [aiValidating, setAiValidating] = useState(false);
   const [aiAmbiguousOptions, setAiAmbiguousOptions] = useState([]);
+
+  // Handle incoming 1-Click AI Action pre-fills from Calendar, Kanban, or TaskModal
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const incomingTopic = location.state?.topic || params.get("topic");
+    const incomingSubject = location.state?.subject || params.get("subject");
+    if (incomingTopic || incomingSubject) {
+      const topicText = incomingTopic || incomingSubject;
+      setAiTopic(topicText);
+      setIsGeneratingAi(true);
+      if (location.state?.difficulty) {
+        setAiDifficulty(location.state.difficulty);
+      }
+    }
+  }, [location]);
 
   // Fetch quizzes from Cloud on mount if logged in, with fallback to local storage
   useEffect(() => {

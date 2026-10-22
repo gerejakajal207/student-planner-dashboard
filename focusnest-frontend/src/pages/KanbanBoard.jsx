@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useDrag, useDrop, DndProvider } from "react-dnd";
 import { HTML5toTouch } from "rdndmb-html5-to-touch";
 import { MultiBackend } from "react-dnd-multi-backend";
@@ -53,6 +54,7 @@ function DraggableTaskCard({ task, columnColor, onEdit, onDeleteRequest, activeT
   const pri = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.Medium;
   const eff = EFFORT_STYLES[task.effort] ?? EFFORT_STYLES.Medium;
   const isActiveFocus = activeTaskId === task.id;
+  const navigate = useNavigate();
 
   return (
     <div
@@ -163,6 +165,32 @@ function DraggableTaskCard({ task, columnColor, onEdit, onDeleteRequest, activeT
                 {new Date(task.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </span>
             )}
+          </div>
+
+          {/* 1-Click AI Actions on this task */}
+          <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-white/[0.06] flex flex-col gap-1.5">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const topic = task.subject && task.title ? `${task.subject}: ${task.title}` : task.title || task.subject;
+                navigate("/revise", { state: { topic, subject: task.subject || task.title } });
+              }}
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-indigo-50/70 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 border border-indigo-200/60 dark:border-indigo-500/20 py-1.5 px-2 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 transition-colors"
+            >
+              <span>⚡</span> Generate Flashcards for this
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const topic = task.subject && task.title ? `${task.subject}: ${task.title}` : task.title || task.subject;
+                navigate("/mcq-test", { state: { topic, subject: task.subject || task.title } });
+              }}
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-violet-50/70 hover:bg-violet-100 dark:bg-violet-500/10 dark:hover:bg-violet-500/20 border border-violet-200/60 dark:border-violet-500/20 py-1.5 px-2 text-[11px] font-bold text-violet-700 dark:text-violet-300 transition-colors"
+            >
+              <span>⚡</span> Generate Practice Quiz for this
+            </button>
           </div>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import {
   BookOpen,
   RotateCw,
@@ -25,6 +26,7 @@ const POPULAR_TOPICS = [
 ];
 
 export default function FlashcardsPage() {
+  const location = useLocation();
   const [decks, setDecks] = useState(() => {
     try {
       const saved = localStorage.getItem("focusnest_flashcard_decks");
@@ -67,6 +69,21 @@ export default function FlashcardsPage() {
   const [aiAmbiguousOptions, setAiAmbiguousOptions] = useState([]);
 
   const [newCard, setNewCard] = useState({ front: "", back: "" });
+
+  // Handle incoming 1-Click AI Action pre-fills from Calendar, Kanban, or TaskModal
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const incomingTopic = location.state?.topic || params.get("topic");
+    const incomingSubject = location.state?.subject || params.get("subject");
+    if (incomingTopic || incomingSubject) {
+      const topicText = incomingTopic || incomingSubject;
+      setAiTopic(topicText);
+      setIsGeneratingAi(true);
+      if (location.state?.difficulty) {
+        setAiDifficulty(location.state.difficulty);
+      }
+    }
+  }, [location]);
 
   // Fetch decks from Cloud on mount if logged in, with fallback to local storage
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { ChevronDown, Calendar, BookOpen } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ChevronDown, Calendar, BookOpen, Sparkles } from "lucide-react";
 
 const PRIORITY_COLORS = {
   Low: "bg-emerald-500",
@@ -98,6 +99,7 @@ const defaultState = {
 };
 
 export default function TaskModal({ isOpen, onClose, onSubmit, initialDueDate, taskToEdit }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState(defaultState);
   const [showToast, setShowToast] = useState(false);
   const today = new Date().toISOString().split("T")[0];
@@ -159,6 +161,32 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialDueDate, t
       }
     }
   }
+
+  const handleGenerateFlashcards = () => {
+    const topic = form.subject && form.taskName 
+      ? `${form.subject}: ${form.taskName}` 
+      : form.taskName || form.subject || "Study Topic";
+    handleClose();
+    navigate("/revise", { 
+      state: { 
+        topic, 
+        subject: form.subject || form.taskName 
+      } 
+    });
+  };
+
+  const handleGenerateQuiz = () => {
+    const topic = form.subject && form.taskName 
+      ? `${form.subject}: ${form.taskName}` 
+      : form.taskName || form.subject || "Study Topic";
+    handleClose();
+    navigate("/mcq-test", { 
+      state: { 
+        topic, 
+        subject: form.subject || form.taskName 
+      } 
+    });
+  };
 
   function handleClose() {
     setForm(defaultState);
@@ -301,6 +329,32 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialDueDate, t
                   className="w-full resize-none rounded-xl border border-slate-200 dark:border-white/[0.1] bg-slate-50 dark:bg-[#1e2530]/80 px-3.5 py-2.5 text-sm text-slate-800 dark:text-[#e2e8f0] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-[#1e2530] transition-colors"
                 />
               </div>
+
+              {/* 1-Click AI Actions on this Task */}
+              {(form.taskName || form.subject) && (
+                <div className="rounded-2xl border border-indigo-100 dark:border-indigo-500/20 bg-gradient-to-r from-indigo-50/70 via-white to-violet-50/70 dark:from-indigo-950/25 dark:via-[#161b22] dark:to-violet-950/25 p-3.5">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 mb-2">
+                    <Sparkles size={14} className="text-indigo-600 dark:text-indigo-400" />
+                    <span>1-Click AI Study Generator</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleGenerateFlashcards}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-white dark:bg-[#1e2530] hover:bg-indigo-50 dark:hover:bg-indigo-500/20 border border-indigo-200/80 dark:border-indigo-500/30 px-3 py-2 text-xs font-bold text-indigo-700 dark:text-indigo-300 shadow-2xs transition-all active:scale-95"
+                    >
+                      <span>⚡</span> Generate Flashcards for this
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleGenerateQuiz}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-white dark:bg-[#1e2530] hover:bg-violet-50 dark:hover:bg-violet-500/20 border border-violet-200/80 dark:border-violet-500/30 px-3 py-2 text-xs font-bold text-violet-700 dark:text-violet-300 shadow-2xs transition-all active:scale-95"
+                    >
+                      <span>⚡</span> Generate Practice Quiz for this
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Actions */}
