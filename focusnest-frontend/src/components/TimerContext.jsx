@@ -5,107 +5,153 @@ const TimerContext = createContext();
 
 const STORAGE_KEY = "focusnest_pomodoro_session";
 
+// ── Web Audio Context & Synthesizers ──
+let sharedAudioCtx = null;
+let currentNodes = [];
+let currentMasterGain = null;
+let activeSoundscapeType = null;
+let fadeTimeoutId = null;
+
+function getSharedAudioContext() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return null;
+    if (!sharedAudioCtx || sharedAudioCtx.state === "closed") {
+      sharedAudioCtx = new AudioCtx();
+    }
+    if (sharedAudioCtx.state === "suspended") {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+    return sharedAudioCtx;
+  } catch (e) {
+    console.warn("AudioContext init error:", e);
+    return null;
+  }
+}
+
 // Audio alert chime using Web Audio API
 function playAlertChime() {
   try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
     const now = ctx.currentTime;
 
-    // Note 1: E5
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = "sine";
-    osc1.frequency.setValueAtTime(659.25, now);
-    gain1.gain.setValueAtTime(0.2, now);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.6);
+    // Harmonic 4-bell chime (C5 -> G5 -> C6 -> E6)
+    const notes = [
+      { freq: 523.25, time: 0.0,  dur: 0.7, gain: 0.35 },
+      { freq: 783.99, time: 0.16, dur: 0.8, gain: 0.38 },
+      { freq: 1046.5, time: 0.32, dur: 1.1, gain: 0.42 },
+      { freq: 1318.5, time: 0.48, dur: 1.4, gain: 0.35 },
+    ];
 
-    // Note 2: G#5
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = "sine";
-    osc2.frequency.setValueAtTime(830.61, now + 0.2);
-    gain2.gain.setValueAtTime(0.25, now + 0.2);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(now + 0.2);
-    osc2.stop(now + 0.8);
+    notes.forEach(({ freq, time, dur, gain: noteGain }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now + time);
 
-    // Note 3: B5
-    const osc3 = ctx.createOscillator();
-    const gain3 = ctx.createGain();
-    osc3.type = "sine";
-    osc3.frequency.setValueAtTime(987.77, now + 0.4);
-    gain3.gain.setValueAtTime(0.3, now + 0.4);
-    gain3.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-    osc3.connect(gain3);
-    gain3.connect(ctx.destination);
-    osc3.start(now + 0.4);
-    osc3.stop(now + 1.2);
+      gain.gain.setValueAtTime(noteGain, now + time);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + time + dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + time);
+      osc.stop(now + time + dur);
+    });
+
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      navigator.vibrate([300, 150, 300]);
+    }
   } catch (e) {
     console.warn("Audio chime error:", e);
   }
 }
 
 // ── Web Audio API Ambient Soundscapes Synthesizer ──
-let ambientCtx = null;
-let ambientNodes = [];
-let ambientGain = null;
+function stopAmbientSoundscape(immediate = false) {
+  if (fadeTimeoutId) {
+    clearTimeout(fadeTimeoutId);
+    fadeTimeoutId = null;
+  }
 
-function stopAmbientSoundscape() {
+  const nodesToStop = currentNodes;
+  const gainToStop = currentMasterGain;
+  currentNodes = [];
+  currentMasterGain = null;
+  activeSoundscapeType = null;
+
+  if (!nodesToStop || nodesToStop.length === 0) return;
+
+  if (immediate || !gainToStop || !sharedAudioCtx || sharedAudioCtx.state !== "running") {
+    nodesToStop.forEach((node) => {
+      try {
+        if (node.stop) node.stop();
+        node.disconnect();
+      } catch {}
+    });
+    return;
+  }
+
   try {
-    if (ambientGain && ambientCtx) {
-      ambientGain.gain.setValueAtTime(ambientGain.gain.value, ambientCtx.currentTime);
-      ambientGain.gain.linearRampToValueAtTime(0.001, ambientCtx.currentTime + 0.3);
-    }
-    setTimeout(() => {
-      ambientNodes.forEach((node) => {
-        try {
-          if (node.stop) node.stop();
-          node.disconnect();
-        } catch {
-          // ignore
-        }
-      });
-      ambientNodes = [];
-      ambientGain = null;
-    }, 350);
-  } catch (e) {
-    console.warn("Error stopping soundscape", e);
+    const now = sharedAudioCtx.currentTime;
+    gainToStop.gain.setValueAtTime(gainToStop.gain.value, now);
+    gainToStop.gain.linearRampToValueAtTime(0.0001, now + 0.25);
+  } catch {}
+
+  fadeTimeoutId = setTimeout(() => {
+    nodesToStop.forEach((node) => {
+      try {
+        if (node.stop) node.stop();
+        node.disconnect();
+      } catch {}
+    });
+    fadeTimeoutId = null;
+  }, 300);
+}
+
+function setAmbientVolume(vol) {
+  if (currentMasterGain && sharedAudioCtx && sharedAudioCtx.state === "running") {
+    try {
+      const target = Math.max(0.01, Math.min(vol, 1.0));
+      currentMasterGain.gain.setValueAtTime(currentMasterGain.gain.value, sharedAudioCtx.currentTime);
+      currentMasterGain.gain.linearRampToValueAtTime(target, sharedAudioCtx.currentTime + 0.08);
+    } catch {}
   }
 }
 
 function playAmbientSoundscape(type, volume = 0.5) {
-  stopAmbientSoundscape();
-  if (!type || type === "none") return;
+  if (!type || type === "none") {
+    stopAmbientSoundscape();
+    return;
+  }
+
+  const ctx = getSharedAudioContext();
+  if (!ctx) return;
+
+  // If already playing this exact track, just adjust volume
+  if (activeSoundscapeType === type && currentMasterGain) {
+    setAmbientVolume(volume);
+    return;
+  }
+
+  // Stop any previous track immediately without touching newly created nodes
+  stopAmbientSoundscape(true);
 
   try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-
-    if (!ambientCtx || ambientCtx.state === "closed") {
-      ambientCtx = new AudioCtx();
-    }
-    if (ambientCtx.state === "suspended") {
-      ambientCtx.resume();
-    }
-
-    const ctx = ambientCtx;
     const masterGain = ctx.createGain();
+    const targetVol = Math.max(0.01, Math.min(volume, 1.0));
     masterGain.gain.setValueAtTime(0.001, ctx.currentTime);
-    masterGain.gain.linearRampToValueAtTime(Math.max(0.03, Math.min(volume, 1.0)), ctx.currentTime + 0.4);
+    masterGain.gain.linearRampToValueAtTime(targetVol, ctx.currentTime + 0.2);
     masterGain.connect(ctx.destination);
-    ambientGain = masterGain;
+
+    currentMasterGain = masterGain;
+    activeSoundscapeType = type;
+    const newNodes = [];
 
     if (type === "whitenoise") {
-      // 3-second looped white noise with warm lowpass filter
-      const bufferSize = ctx.sampleRate * 3;
+      // 5-second seamless looped warm white noise with lowpass
+      const bufferSize = ctx.sampleRate * 5;
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
       for (let i = 0; i < bufferSize; i++) {
@@ -117,15 +163,15 @@ function playAmbientSoundscape(type, volume = 0.5) {
 
       const filter = ctx.createBiquadFilter();
       filter.type = "lowpass";
-      filter.frequency.value = 950;
+      filter.frequency.setValueAtTime(900, ctx.currentTime);
 
       noise.connect(filter);
       filter.connect(masterGain);
       noise.start();
-      ambientNodes.push(noise, filter);
+      newNodes.push(noise, filter);
     } else if (type === "rain") {
-      // Pink/rain noise with bandpass filtering and gentle modulation
-      const bufferSize = ctx.sampleRate * 3;
+      // 5-second pink noise with dual bandpass & soft wind LFO
+      const bufferSize = ctx.sampleRate * 5;
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
       let b0 = 0, b1 = 0, b2 = 0;
@@ -134,7 +180,7 @@ function playAmbientSoundscape(type, volume = 0.5) {
         b0 = 0.99886 * b0 + white * 0.0555179;
         b1 = 0.99332 * b1 + white * 0.0750759;
         b2 = 0.96900 * b2 + white * 0.1538520;
-        data[i] = (b0 + b1 + b2) * 0.22;
+        data[i] = (b0 + b1 + b2) * 0.25;
       }
       const rainSource = ctx.createBufferSource();
       rainSource.buffer = buffer;
@@ -142,13 +188,13 @@ function playAmbientSoundscape(type, volume = 0.5) {
 
       const filter = ctx.createBiquadFilter();
       filter.type = "bandpass";
-      filter.frequency.value = 1100;
-      filter.Q.value = 0.7;
+      filter.frequency.setValueAtTime(1050, ctx.currentTime);
+      filter.Q.setValueAtTime(0.7, ctx.currentTime);
 
       const lfo = ctx.createOscillator();
       const lfoGain = ctx.createGain();
-      lfo.frequency.value = 0.25;
-      lfoGain.gain.value = 220;
+      lfo.frequency.setValueAtTime(0.2, ctx.currentTime);
+      lfoGain.gain.setValueAtTime(200, ctx.currentTime);
       lfo.connect(lfoGain);
       lfoGain.connect(filter.frequency);
       lfo.start();
@@ -156,48 +202,48 @@ function playAmbientSoundscape(type, volume = 0.5) {
       rainSource.connect(filter);
       filter.connect(masterGain);
       rainSource.start();
-      ambientNodes.push(rainSource, filter, lfo, lfoGain);
+      newNodes.push(rainSource, filter, lfo, lfoGain);
     } else if (type === "lofi") {
-      // Warm chord pad + subtle lo-fi vibrato & vinyl warmth (F3, A3, C4, E4)
+      // Warm chord pad (Fmaj7: F3, A3, C4, E4) + subtle tape drift
       const chordFreqs = [174.61, 220.0, 261.63, 329.63];
       const filter = ctx.createBiquadFilter();
       filter.type = "lowpass";
-      filter.frequency.value = 400;
+      filter.frequency.setValueAtTime(450, ctx.currentTime);
 
       const padGain = ctx.createGain();
-      padGain.gain.value = 0.16;
+      padGain.gain.setValueAtTime(0.18, ctx.currentTime);
 
-      chordFreqs.forEach((freq) => {
+      chordFreqs.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
         osc.type = "triangle";
-        osc.frequency.value = freq;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
 
         const detuneLfo = ctx.createOscillator();
         const detuneGain = ctx.createGain();
-        detuneLfo.frequency.value = 0.15 + Math.random() * 0.08;
-        detuneGain.gain.value = 3.0;
+        detuneLfo.frequency.setValueAtTime(0.12 + idx * 0.04, ctx.currentTime);
+        detuneGain.gain.setValueAtTime(2.8, ctx.currentTime);
         detuneLfo.connect(detuneGain);
         detuneGain.connect(osc.frequency);
         detuneLfo.start();
 
         osc.connect(padGain);
         osc.start();
-        ambientNodes.push(osc, detuneLfo, detuneGain);
+        newNodes.push(osc, detuneLfo, detuneGain);
       });
 
       padGain.connect(filter);
       filter.connect(masterGain);
-      ambientNodes.push(padGain, filter);
+      newNodes.push(padGain, filter);
     } else if (type === "coffeeshop") {
-      // Brown noise murmur simulation + warm ambience
-      const bufferSize = ctx.sampleRate * 4;
+      // Warm room murmur simulation + soft background texture
+      const bufferSize = ctx.sampleRate * 5;
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
       let lastOut = 0.0;
       for (let i = 0; i < bufferSize; i++) {
         const white = Math.random() * 2 - 1;
         lastOut = (lastOut + 0.02 * white) / 1.02;
-        data[i] = lastOut * 3.2;
+        data[i] = lastOut * 3.5;
       }
       const chatter = ctx.createBufferSource();
       chatter.buffer = buffer;
@@ -205,13 +251,15 @@ function playAmbientSoundscape(type, volume = 0.5) {
 
       const filter = ctx.createBiquadFilter();
       filter.type = "lowpass";
-      filter.frequency.value = 550;
+      filter.frequency.setValueAtTime(500, ctx.currentTime);
 
       chatter.connect(filter);
       filter.connect(masterGain);
       chatter.start();
-      ambientNodes.push(chatter, filter);
+      newNodes.push(chatter, filter);
     }
+
+    currentNodes = newNodes;
   } catch (e) {
     console.warn("Audio soundscape playback error:", e);
   }
@@ -219,32 +267,51 @@ function playAmbientSoundscape(type, volume = 0.5) {
 
 // Request and send Chrome/Browser Notifications
 async function requestNotificationPermission() {
-  if (!("Notification" in window)) return false;
-  if (Notification.permission === "granted") return true;
-  if (Notification.permission !== "denied") {
-    const permission = await Notification.requestPermission();
-    return permission === "granted";
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return "unsupported";
   }
-  return false;
+  if (Notification.permission === "granted") {
+    return "granted";
+  }
+  try {
+    const permission = await Notification.requestPermission();
+    return permission;
+  } catch {
+    return Notification.permission;
+  }
 }
 
 function sendBrowserNotification(title, body) {
-  if (!("Notification" in window) || Notification.permission !== "granted") {
+  if (typeof window === "undefined" || !("Notification" in window)) {
     return;
   }
-  try {
-    const notification = new Notification(title, {
-      body,
-      icon: "/logo.svg",
-      tag: "focusnest-pomodoro",
-      requireInteraction: false,
+  if (Notification.permission === "granted") {
+    try {
+      const notification = new Notification(title, {
+        body,
+        icon: "/favicon.ico",
+        tag: "focusnest-pomodoro",
+        requireInteraction: true,
+      });
+      notification.onclick = function () {
+        window.focus();
+        this.close();
+      };
+    } catch (e) {
+      console.warn("Notification error:", e);
+    }
+  } else if (Notification.permission === "default") {
+    Notification.requestPermission().then((perm) => {
+      if (perm === "granted") {
+        try {
+          new Notification(title, {
+            body,
+            icon: "/favicon.ico",
+            tag: "focusnest-pomodoro",
+          });
+        } catch {}
+      }
     });
-    notification.onclick = function () {
-      window.focus();
-      this.close();
-    };
-  } catch (e) {
-    console.warn("Notification error:", e);
   }
 }
 
@@ -336,12 +403,51 @@ export function TimerProvider({ children }) {
   });
 
   const [soundscapePlaying, setSoundscapePlaying] = useState(false);
-
-  // Sync volume with active soundscape
-  useEffect(() => {
-    if (ambientGain && ambientCtx) {
-      ambientGain.gain.setValueAtTime(soundscapeVolume, ambientCtx.currentTime);
+  const [sessionAlert, setSessionAlert] = useState(null);
+  const [notificationPermission, setNotificationPermission] = useState(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      return Notification.permission;
     }
+    return "unsupported";
+  });
+
+  const dismissSessionAlert = useCallback(() => {
+    setSessionAlert(null);
+  }, []);
+
+  const handleRequestPermission = useCallback(async () => {
+    const perm = await requestNotificationPermission();
+    setNotificationPermission(perm);
+    return perm;
+  }, []);
+
+  const testNotification = useCallback(async () => {
+    playAlertChime();
+    const perm = await handleRequestPermission();
+    sendBrowserNotification(
+      "FocusNest Notification Test 🔔",
+      "Desktop notifications and audio alerts are functioning correctly!"
+    );
+    setSessionAlert({
+      id: Date.now(),
+      title: "Notification Test Successful! 🔔",
+      message:
+        "Audio chime and in-app alerts are active. " +
+        (perm === "granted"
+          ? "Desktop notifications are enabled."
+          : "For system desktop alerts, please allow notifications in your browser address bar."),
+      mode: "test",
+      isTest: true,
+    });
+    return perm;
+  }, [handleRequestPermission]);
+
+  const volumeRef = useRef(soundscapeVolume);
+
+  // Sync volume with active soundscape without recreating nodes
+  useEffect(() => {
+    volumeRef.current = soundscapeVolume;
+    setAmbientVolume(soundscapeVolume);
     try {
       localStorage.setItem("focusnest_soundscape_volume", soundscapeVolume.toString());
     } catch {
@@ -361,22 +467,11 @@ export function TimerProvider({ children }) {
   // Manage playback based on soundscape state and playing flag
   useEffect(() => {
     if (soundscapePlaying && soundscape !== "none") {
-      playAmbientSoundscape(soundscape, soundscapeVolume);
+      playAmbientSoundscape(soundscape, volumeRef.current);
     } else {
       stopAmbientSoundscape();
     }
-  }, [soundscape, soundscapePlaying, soundscapeVolume]);
-
-  // Auto-play/pause with timer when soundscape is selected
-  useEffect(() => {
-    if (soundscape !== "none") {
-      if (isRunning && !soundscapePlaying) {
-        setSoundscapePlaying(true);
-      } else if (!isRunning && soundscapePlaying) {
-        setSoundscapePlaying(false);
-      }
-    }
-  }, [isRunning, soundscape, soundscapePlaying]);
+  }, [soundscape, soundscapePlaying]);
 
   const toggleSoundscape = () => {
     if (soundscape === "none") {
@@ -407,8 +502,11 @@ export function TimerProvider({ children }) {
       setTimeLeft(duration);
       setIsRunning(true);
       setEndTime(Date.now() + duration * 1000);
+      if (soundscape !== "none") {
+        setSoundscapePlaying(true);
+      }
     },
-    [focusTime]
+    [focusTime, soundscape]
   );
 
   const clearActiveTask = useCallback(() => {
@@ -437,6 +535,11 @@ export function TimerProvider({ children }) {
 
   // Handle session completion
   const handleSessionComplete = useCallback(() => {
+    // 1. Stop ambient soundscape immediately so chime and alert are heard
+    stopAmbientSoundscape(false);
+    setSoundscapePlaying(false);
+
+    // 2. Play clear chime & trigger vibration
     playAlertChime();
     setIsRunning(false);
     setEndTime(null);
@@ -458,21 +561,39 @@ export function TimerProvider({ children }) {
       setTimeLeft(nextDuration);
 
       const taskName = activeTask?.title ? ` on "${activeTask.title}"` : "";
-      sendBrowserNotification(
-        "Focus Session Complete! 🎯",
-        isLong
-          ? `Awesome work! Completed ${nextCount} sessions${taskName}. Time for a well-deserved ${longBreak}-minute Long Break!`
-          : `Great job! Logged ${focusTime} mins of focus${taskName}. Enjoy your ${shortBreak}-minute Short Break.`
-      );
+      const alertTitle = "Focus Session Complete! 🎯";
+      const alertMsg = isLong
+        ? `Awesome work! Completed ${nextCount} sessions${taskName}. Time for a well-deserved ${longBreak}-minute Long Break!`
+        : `Great job! Logged ${focusTime} mins of focus${taskName}. Enjoy your ${shortBreak}-minute Short Break.`;
+
+      sendBrowserNotification(alertTitle, alertMsg);
+
+      setSessionAlert({
+        id: Date.now(),
+        title: alertTitle,
+        message: alertMsg,
+        mode: "focus",
+        isLongBreak: isLong,
+        nextMode: nextMode,
+      });
     } else {
       // Break is finished
       setMode("focus");
       setTimeLeft(focusTime * 60);
 
-      sendBrowserNotification(
-        "Break Over! ⚡",
-        `Ready to jump back in? Click here to start your next ${focusTime}-minute Focus session.`
-      );
+      const alertTitle = "Break Over! ⚡";
+      const alertMsg = `Ready to jump back in? Time to start your next ${focusTime}-minute Focus session.`;
+
+      sendBrowserNotification(alertTitle, alertMsg);
+
+      setSessionAlert({
+        id: Date.now(),
+        title: alertTitle,
+        message: alertMsg,
+        mode: mode,
+        isLongBreak: false,
+        nextMode: "focus",
+      });
     }
   }, [mode, completedSessions, interval, longBreak, shortBreak, focusTime, activeTask, logFocus]);
 
@@ -532,7 +653,10 @@ export function TimerProvider({ children }) {
 
   // Public control methods
   const startTimer = () => {
-    requestNotificationPermission();
+    handleRequestPermission();
+    if (soundscape !== "none" && !soundscapePlaying) {
+      setSoundscapePlaying(true);
+    }
     const currentDuration = timeLeft > 0 ? timeLeft : getDurationForMode(mode);
     const targetEnd = Date.now() + currentDuration * 1000;
     setEndTime(targetEnd);
@@ -614,7 +738,11 @@ export function TimerProvider({ children }) {
         skipToNext,
         switchMode,
         formatTime,
-        requestNotificationPermission,
+        requestNotificationPermission: handleRequestPermission,
+        notificationPermission,
+        testNotification,
+        sessionAlert,
+        dismissSessionAlert,
         activeTask,
         setActiveTask,
         focusOnTask,

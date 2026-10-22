@@ -23,6 +23,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import TermsOfUsePage from "./pages/TermsOfUsePage";
 import FloatingStudyCopilot from "./components/FloatingStudyCopilot";
+import SessionAlertToast from "./components/SessionAlertToast";
 
 function AppLayout() {
   const location = useLocation();
@@ -68,6 +69,7 @@ function AppLayout() {
         <Route path="*" element={user ? <NotFoundPage /> : <Navigate to="/login" replace />} />
       </Routes>
       {!isAuthPage && <FloatingStudyCopilot />}
+      {!isAuthPage && <SessionAlertToast />}
     </div>
   );
 }

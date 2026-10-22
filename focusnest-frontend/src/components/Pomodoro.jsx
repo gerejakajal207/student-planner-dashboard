@@ -53,6 +53,7 @@ export default function Pomodoro() {
     setSoundscapeVolume,
     soundscapePlaying,
     setSoundscapePlaying,
+    notificationPermission,
   } = useTimer();
 
   // SVG circle config
@@ -82,10 +83,17 @@ export default function Pomodoro() {
         </div>
         <button
           onClick={() => setShowSettings(true)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1e2530] hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-          title="Timer Settings"
+          className="relative flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1e2530] hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+          title={
+            notificationPermission === "granted"
+              ? "Timer & Notification Settings (Alerts Active)"
+              : "Timer & Notification Settings"
+          }
         >
           <Settings size={18} />
+          {notificationPermission === "granted" && (
+            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-xs" />
+          )}
         </button>
       </div>
 
