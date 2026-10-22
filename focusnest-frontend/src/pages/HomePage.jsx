@@ -23,10 +23,18 @@ import QuoteCard from "../components/QuoteCard";
 // ---------- Helpers ----------
 function getGreeting() {
   const h = new Date().getHours();
-  if (h >= 5 && h < 12) return "Good Morning";
-  if (h >= 12 && h < 17) return "Good Afternoon";
-  if (h >= 17 && h < 21) return "Good Evening";
-  return "Good Night";
+  if (h >= 5 && h < 12) return "Good morning";
+  if (h >= 12 && h < 17) return "Good afternoon";
+  if (h >= 17 && h < 21) return "Good evening";
+  return "Working late";
+}
+
+function getBriefingTitle() {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return "AI Morning Briefing";
+  if (h >= 12 && h < 17) return "AI Afternoon Briefing";
+  if (h >= 17 && h < 21) return "AI Evening Briefing";
+  return "AI Late-Night Briefing";
 }
 
 function isToday(date) {
@@ -195,10 +203,29 @@ export default function HomePage() {
   const prioritySubject = highestPriorityTask.subject || "Biology";
   const priorityTopic = highestPriorityTask.title || "Cell Genetics";
 
-  const morningBriefingText =
+  const currentHour = now.getHours();
+  const greeting = getGreeting();
+  const briefingTitle = getBriefingTitle();
+
+  const isLateNight = currentHour >= 21 || currentHour < 5;
+  const focusMinutes = isLateNight ? 25 : 50;
+  const focusButtonLabel = `Start ${focusMinutes}m Focus`;
+
+  let recommendationText = "";
+  if (isLateNight) {
+    recommendationText = `We recommend dedicating a focused 25-minute Pomodoro block to ${prioritySubject}, followed by a quick 5-minute MCQ revision on ${priorityTopic} before winding down.`;
+  } else if (currentHour >= 12 && currentHour < 17) {
+    recommendationText = `We recommend dedicating your afternoon 50-minute Pomodoro block to ${prioritySubject}, followed by a quick 5-minute MCQ revision on ${priorityTopic}.`;
+  } else if (currentHour >= 17 && currentHour < 21) {
+    recommendationText = `We recommend dedicating your evening 50-minute Pomodoro block to ${prioritySubject}, followed by a quick 5-minute MCQ revision on ${priorityTopic}.`;
+  } else {
+    recommendationText = `We recommend dedicating your first 50-minute Pomodoro block to ${prioritySubject}, followed by a quick 5-minute MCQ revision on ${priorityTopic}.`;
+  }
+
+  const aiBriefingText =
     urgentCount > 0
-      ? `Good morning, ${userName}! You have ${urgentCount} assignment${urgentCount === 1 ? "" : "s"} due within 48 hours. We recommend dedicating your first 50-minute Pomodoro block to ${prioritySubject}, followed by a quick 5-minute MCQ revision on ${priorityTopic}.`
-      : `Good morning, ${userName}! Your schedule is clear of immediate deadlines. We recommend dedicating your first 50-minute Pomodoro block to ${prioritySubject}, followed by a quick 5-minute MCQ revision on ${priorityTopic}.`;
+      ? `${greeting}, ${userName}! You have ${urgentCount} assignment${urgentCount === 1 ? "" : "s"} due within 48 hours. ${recommendationText}`
+      : `${greeting}, ${userName}! Your schedule is clear of immediate deadlines. ${recommendationText}`;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0d1117] p-4 sm:p-6 md:p-8 transition-colors">
@@ -212,7 +239,7 @@ export default function HomePage() {
 
           <div className="relative">
             <h1 className="text-2xl font-extrabold text-slate-800 dark:text-white sm:text-3xl">
-              {getGreeting()}, {userName}!
+              {greeting}, {userName}!
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-[#94a3b8] mt-1">Ready to make today productive and achieve your goals?</p>
           </div>
@@ -256,7 +283,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* ── AI MORNING BRIEFING CARD ── */}
+        {/* ── AI DYNAMIC BRIEFING CARD ── */}
         <div className="relative overflow-hidden rounded-3xl border border-indigo-200/80 dark:border-indigo-500/30 bg-gradient-to-br from-indigo-50/90 via-white to-violet-50/90 dark:from-[#161b22] dark:via-[#161b22] dark:to-indigo-950/30 p-6 sm:p-7 shadow-sm transition-all">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 relative z-10">
@@ -267,14 +294,14 @@ export default function HomePage() {
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20 px-2.5 py-0.5 text-[10px] font-extrabold text-indigo-700 dark:text-indigo-300 tracking-wider uppercase">
-                    ✨ AI Morning Briefing
+                    ✨ {briefingTitle}
                   </span>
                   <span className="text-[11px] font-medium text-slate-400 dark:text-[#64748b]">
                     Curated for {userName} · {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                   </span>
                 </div>
                 <p className="text-sm sm:text-base font-semibold text-slate-800 dark:text-white leading-relaxed max-w-3xl">
-                  "{morningBriefingText}"
+                  "{aiBriefingText}"
                 </p>
               </div>
             </div>
@@ -285,7 +312,7 @@ export default function HomePage() {
                 onClick={() => navigate("/todays-page")}
                 className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-200 dark:shadow-indigo-950/50 transition-all hover:scale-105 active:scale-95"
               >
-                <Zap size={14} /> Start 50m Focus
+                <Zap size={14} /> {focusButtonLabel}
               </button>
               <button
                 onClick={() =>
