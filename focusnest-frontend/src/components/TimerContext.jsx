@@ -290,51 +290,61 @@ async function requestNotificationPermission() {
 
 function sendBrowserNotification(title, body) {
   if (typeof window === "undefined" || !("Notification" in window)) {
-    return;
+    return false;
   }
   if (Notification.permission !== "granted") {
-    return;
+    return false;
   }
+
+  // Use absolute URL for icons if origin is available to avoid Chrome path resolution issues
+  const origin = (window.location && window.location.origin) ? window.location.origin : "";
+  const iconUrl = origin ? `${origin}/logo192.png` : "/logo192.png";
+  const badgeUrl = origin ? `${origin}/favicon.ico` : "/favicon.ico";
 
   const options = {
     body,
-    icon: "/logo192.png",
-    badge: "/favicon.ico",
-    tag: "focusnest-pomodoro-alert",
+    icon: iconUrl,
+    badge: badgeUrl,
+    tag: `focusnest-${Date.now()}`,
     renotify: true,
     requireInteraction: true,
     silent: false,
   };
 
-  // 1. Try Service Worker showNotification (works in background tabs & minimized browser)
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.ready
-      .then((reg) => {
-        reg.showNotification(title, options);
-      })
-      .catch(() => {
-        try {
-          const notification = new Notification(title, options);
-          notification.onclick = function () {
-            window.focus();
-            this.close();
-          };
-        } catch (e) {
-          console.warn("Notification error:", e);
-        }
-      });
-  } else {
-    // 2. Direct Window Notification
+  let notificationSent = false;
+
+  // 1. Direct native Notification constructor (standard, synchronous, immediate on Desktop Chrome)
+  try {
+    const notification = new Notification(title, options);
+    notification.onclick = function () {
+      window.focus();
+      this.close();
+    };
+    notificationSent = true;
+  } catch (err) {
+    console.warn("Direct Notification constructor failed, trying basic fallback:", err);
     try {
-      const notification = new Notification(title, options);
-      notification.onclick = function () {
+      const basicNotification = new Notification(title, { body });
+      basicNotification.onclick = function () {
         window.focus();
         this.close();
       };
+      notificationSent = true;
     } catch (e) {
-      console.warn("Notification error:", e);
+      console.warn("Basic Notification fallback also failed:", e);
     }
   }
+
+  // 2. Also dispatch to active Service Worker if available (without blocking or hanging)
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistration().then((reg) => {
+      if (reg && reg.active) {
+        reg.showNotification(title, options).catch(() => {});
+      }
+    }).catch(() => {});
+  }
+
+  return notificationSent;
 }
 
 export function TimerProvider({ children }) {
