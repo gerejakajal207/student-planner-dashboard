@@ -12,6 +12,7 @@ import {
   BarChart2,
   Sparkles,
   Brain,
+  Zap,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTasks } from "../components/TaskContext";
@@ -170,6 +171,35 @@ export default function HomePage() {
     { icon: Clock,       value: pending.length,        description: "Pending / Todo",  colorClass: "text-amber-500",   bgClass: "bg-amber-50 dark:bg-amber-500/[0.1]"   },
   ];
 
+  // AI Morning Briefing Metrics
+  const now = new Date();
+  const tasksDueIn48h = tasks.filter((t) => {
+    if (t.status === "Done") return false;
+    const taskDate = new Date(t.due_date || t.date || Date.now());
+    const diffHours = (taskDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+    return diffHours >= -12 && diffHours <= 48;
+  });
+
+  const userName = user?.name?.split(" ")[0] || "Student";
+  const urgentCount = tasksDueIn48h.length;
+  const highestPriorityTask =
+    [...tasksDueIn48h].sort((a, b) => {
+      const pOrder = { High: 3, Medium: 2, Low: 1 };
+      return (pOrder[b.priority] || 2) - (pOrder[a.priority] || 2);
+    })[0] ||
+    tasks.find((t) => t.status !== "Done") || {
+      subject: "Biology",
+      title: "Cell Genetics",
+    };
+
+  const prioritySubject = highestPriorityTask.subject || "Biology";
+  const priorityTopic = highestPriorityTask.title || "Cell Genetics";
+
+  const morningBriefingText =
+    urgentCount > 0
+      ? `Good morning, ${userName}! You have ${urgentCount} assignment${urgentCount === 1 ? "" : "s"} due within 48 hours. We recommend dedicating your first 50-minute Pomodoro block to ${prioritySubject}, followed by a quick 5-minute MCQ revision on ${priorityTopic}.`
+      : `Good morning, ${userName}! Your schedule is clear of immediate deadlines. We recommend dedicating your first 50-minute Pomodoro block to ${prioritySubject}, followed by a quick 5-minute MCQ revision on ${priorityTopic}.`;
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0d1117] p-4 sm:p-6 md:p-8 transition-colors">
       <div className="mx-auto max-w-7xl flex flex-col gap-6">
@@ -182,7 +212,7 @@ export default function HomePage() {
 
           <div className="relative">
             <h1 className="text-2xl font-extrabold text-slate-800 dark:text-white sm:text-3xl">
-              {getGreeting()}, {user?.name?.split(" ")[0] || "Student"}!
+              {getGreeting()}, {userName}!
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-[#94a3b8] mt-1">Ready to make today productive and achieve your goals?</p>
           </div>
@@ -223,6 +253,61 @@ export default function HomePage() {
             >
               <Brain size={16} /> MCQ Quiz
             </button>
+          </div>
+        </div>
+
+        {/* ── AI MORNING BRIEFING CARD ── */}
+        <div className="relative overflow-hidden rounded-3xl border border-indigo-200/80 dark:border-indigo-500/30 bg-gradient-to-br from-indigo-50/90 via-white to-violet-50/90 dark:from-[#161b22] dark:via-[#161b22] dark:to-indigo-950/30 p-6 sm:p-7 shadow-sm transition-all">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 relative z-10">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-300 dark:shadow-indigo-950">
+                <Sparkles size={22} className="animate-pulse" />
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20 px-2.5 py-0.5 text-[10px] font-extrabold text-indigo-700 dark:text-indigo-300 tracking-wider uppercase">
+                    ✨ AI Morning Briefing
+                  </span>
+                  <span className="text-[11px] font-medium text-slate-400 dark:text-[#64748b]">
+                    Curated for {userName} · {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                  </span>
+                </div>
+                <p className="text-sm sm:text-base font-semibold text-slate-800 dark:text-white leading-relaxed max-w-3xl">
+                  "{morningBriefingText}"
+                </p>
+              </div>
+            </div>
+
+            {/* Quick 1-Click Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2.5 self-stretch sm:self-auto lg:flex-shrink-0">
+              <button
+                onClick={() => navigate("/todays-page")}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-200 dark:shadow-indigo-950/50 transition-all hover:scale-105 active:scale-95"
+              >
+                <Zap size={14} /> Start 50m Focus
+              </button>
+              <button
+                onClick={() =>
+                  navigate("/mcq-test", {
+                    state: { topic: priorityTopic, subject: prioritySubject },
+                  })
+                }
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 px-3.5 py-2.5 text-xs font-bold text-violet-700 dark:text-violet-300 transition-all active:scale-95"
+              >
+                <Brain size={14} /> Practice MCQ
+              </button>
+              <button
+                onClick={() =>
+                  navigate("/revise", {
+                    state: { topic: priorityTopic, subject: prioritySubject },
+                  })
+                }
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e2530] hover:bg-slate-50 dark:hover:bg-[#252d3a] px-3.5 py-2.5 text-xs font-semibold text-slate-700 dark:text-[#e2e8f0] transition-all active:scale-95"
+              >
+                <BookOpen size={14} /> Flashcards
+              </button>
+            </div>
           </div>
         </div>
 

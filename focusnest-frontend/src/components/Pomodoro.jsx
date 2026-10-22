@@ -1,5 +1,19 @@
 import { useState } from "react";
-import { Settings, Play, Pause, RotateCcw, SkipForward, Flame, Target, Check, X, ChevronDown } from "lucide-react";
+import {
+  Settings,
+  Play,
+  Pause,
+  RotateCcw,
+  SkipForward,
+  Flame,
+  Target,
+  Check,
+  X,
+  ChevronDown,
+  Headphones,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import PomodoroSettings from "./PomodoroSettings";
 import { useTimer } from "./TimerContext";
 import { useTasks } from "./TaskContext";
@@ -33,6 +47,12 @@ export default function Pomodoro() {
     activeTask,
     focusOnTask,
     clearActiveTask,
+    soundscape,
+    setSoundscape,
+    soundscapeVolume,
+    setSoundscapeVolume,
+    soundscapePlaying,
+    setSoundscapePlaying,
   } = useTimer();
 
   // SVG circle config
@@ -264,6 +284,114 @@ export default function Pomodoro() {
         >
           <SkipForward size={16} />
         </button>
+      </div>
+
+      {/* ── AMBIENT SOUNDSCAPES ── */}
+      <div className="mt-5 rounded-2xl bg-slate-50 dark:bg-[#1e2530]/60 p-3.5 border border-slate-100 dark:border-white/[0.05]">
+        <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center gap-2">
+            <div
+              className={`flex h-6 w-6 items-center justify-center rounded-lg transition-colors ${
+                soundscapePlaying && soundscape !== "none"
+                  ? "bg-indigo-600 text-white animate-pulse"
+                  : "bg-slate-200 dark:bg-white/[0.08] text-slate-500"
+              }`}
+            >
+              <Headphones size={13} />
+            </div>
+            <span className="text-xs font-bold text-slate-700 dark:text-[#cbd5e1]">
+              Ambient Soundscape
+            </span>
+            {soundscapePlaying && soundscape !== "none" && (
+              <span className="flex items-center gap-0.5 text-[9px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-1.5 py-0.2 rounded-full">
+                <span className="w-1 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-1 h-3 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="w-1 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                <span className="ml-1">Playing</span>
+              </span>
+            )}
+          </div>
+
+          {/* Play/Pause toggle */}
+          {soundscape !== "none" && (
+            <button
+              onClick={() => setSoundscapePlaying(!soundscapePlaying)}
+              className="flex items-center gap-1 rounded-lg bg-white dark:bg-[#252d3a] border border-slate-200/80 dark:border-white/[0.08] px-2 py-1 text-[11px] font-bold text-slate-700 dark:text-[#e2e8f0] hover:text-indigo-600 shadow-2xs transition-all active:scale-95"
+            >
+              {soundscapePlaying ? <Volume2 size={12} className="text-indigo-600" /> : <VolumeX size={12} />}
+              <span>{soundscapePlaying ? "Mute" : "Play"}</span>
+            </button>
+          )}
+        </div>
+
+        {/* Soundscape Options Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-2.5">
+          {[
+            { id: "lofi", label: "Lo-Fi Beats", icon: "🎧" },
+            { id: "rain", label: "Rain", icon: "🌧️" },
+            { id: "whitenoise", label: "White Noise", icon: "💨" },
+            { id: "coffeeshop", label: "Coffee Shop", icon: "☕" },
+          ].map((item) => {
+            const isSelected = soundscape === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  if (soundscape === item.id) {
+                    setSoundscapePlaying(!soundscapePlaying);
+                  } else {
+                    setSoundscape(item.id);
+                    setSoundscapePlaying(true);
+                  }
+                }}
+                className={`flex items-center justify-center gap-1.5 rounded-xl py-2 px-2 text-xs font-semibold transition-all ${
+                  isSelected
+                    ? "bg-indigo-600 text-white shadow-xs font-bold ring-1 ring-indigo-500"
+                    : "bg-white dark:bg-[#252d3a] hover:bg-slate-100 dark:hover:bg-[#2e3748] text-slate-700 dark:text-[#cbd5e1] border border-slate-200/60 dark:border-white/[0.05]"
+                }`}
+              >
+                <span>{item.icon}</span>
+                <span className="truncate">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Off & Volume slider */}
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <button
+            onClick={() => {
+              setSoundscape("none");
+              setSoundscapePlaying(false);
+            }}
+            className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition-colors ${
+              soundscape === "none"
+                ? "bg-slate-200 dark:bg-white/[0.1] text-slate-700 dark:text-white"
+                : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            }`}
+          >
+            ⏹️ Off
+          </button>
+
+          {soundscape !== "none" && (
+            <div className="flex items-center gap-2 flex-1 max-w-[170px]">
+              <Volume2 size={13} className="text-slate-400 flex-shrink-0" />
+              <input
+                type="range"
+                min="0.05"
+                max="1"
+                step="0.05"
+                value={soundscapeVolume}
+                onChange={(e) => setSoundscapeVolume(parseFloat(e.target.value))}
+                className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                title={`Volume: ${Math.round(soundscapeVolume * 100)}%`}
+              />
+              <span className="text-[10px] text-slate-400 font-mono w-6 text-right">
+                {Math.round(soundscapeVolume * 100)}%
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Settings Modal */}

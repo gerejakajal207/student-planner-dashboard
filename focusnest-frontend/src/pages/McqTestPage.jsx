@@ -54,7 +54,9 @@ export default function McqTestPage() {
 
   // Generator Modal state
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [aiMode, setAiMode] = useState("topic"); // "topic" | "notes"
   const [aiTopic, setAiTopic] = useState("");
+  const [aiNotes, setAiNotes] = useState("");
   const [aiDifficulty, setAiDifficulty] = useState("Medium");
   const [aiCount, setAiCount] = useState(8);
   const [aiLoading, setAiLoading] = useState(false);
@@ -265,43 +267,56 @@ export default function McqTestPage() {
   // Generate dynamic MCQ test via AI
   const handleGenerateAiQuiz = async (e) => {
     e.preventDefault();
-    if (!aiTopic.trim()) return;
 
     setAiError("");
     setAiAmbiguousOptions([]);
 
-    // Validate topic first
-    setAiValidating(true);
-    try {
-      const v = await api.validateTopic(aiTopic.trim());
-      if (v.status === "invalid") {
-        setAiError(v.message || "That doesn't seem like a valid study topic.");
-        setAiValidating(false);
+    if (aiMode === "notes") {
+      if (!aiNotes.trim() || aiNotes.trim().length < 15) {
+        setAiError("Please paste your lecture slides, notes, or syllabus content (minimum 15 characters).");
         return;
       }
-      if (v.status === "ambiguous") {
-        setAiError(v.message || "This topic is ambiguous. Please clarify:");
-        setAiAmbiguousOptions(v.options || []);
-        setAiValidating(false);
+    } else {
+      if (!aiTopic.trim()) {
+        setAiError("Please enter an exam or quiz topic.");
         return;
       }
-    } catch {
-      // validation error — allow through
+
+      // Validate topic first
+      setAiValidating(true);
+      try {
+        const v = await api.validateTopic(aiTopic.trim());
+        if (v.status === "invalid") {
+          setAiError(v.message || "That doesn't seem like a valid study topic.");
+          setAiValidating(false);
+          return;
+        }
+        if (v.status === "ambiguous") {
+          setAiError(v.message || "This topic is ambiguous. Please clarify:");
+          setAiAmbiguousOptions(v.options || []);
+          setAiValidating(false);
+          return;
+        }
+      } catch {
+        // validation error — allow through
+      }
+      setAiValidating(false);
     }
-    setAiValidating(false);
 
     setAiLoading(true);
     try {
-      const data = await api.aiMcqs(aiTopic.trim(), aiDifficulty, aiCount);
+      const topicTitle = aiTopic.trim() || (aiMode === "notes" ? "Course Notes Practice Quiz" : "Untitled Quiz");
+      const notesContent = aiMode === "notes" ? aiNotes.trim() : null;
+      const data = await api.aiMcqs(topicTitle, aiDifficulty, aiCount, notesContent);
       const generatedQuestions = data.questions || [];
 
       if (!generatedQuestions.length) {
-        throw new Error("No MCQs were generated for this topic. Please try another topic or adjust difficulty.");
+        throw new Error("No MCQs were generated. Please try again with more detailed material or adjust difficulty.");
       }
 
       const quizPayload = {
-        title: aiTopic.trim(),
-        subject: aiTopic.trim().length > 22 ? aiTopic.trim().slice(0, 22) + "..." : aiTopic.trim(),
+        title: topicTitle,
+        subject: topicTitle.length > 22 ? topicTitle.slice(0, 22) + "..." : topicTitle,
         difficulty: aiDifficulty,
         questions: generatedQuestions,
       };
@@ -330,6 +345,7 @@ export default function McqTestPage() {
       setShowExplanation(false);
       setIsGeneratingAi(false);
       setAiTopic("");
+      setAiNotes("");
     } catch (err) {
       setAiError(err.message || "Failed to generate MCQs. Please verify your network.");
     } finally {
@@ -1005,41 +1021,107 @@ export default function McqTestPage() {
                 )}
               </div>
 
-              <form onSubmit={handleGenerateAiQuiz} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-[#cbd5e1] mb-1.5">
-                    Quiz Topic / Exam Subject
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={aiTopic}
-                    onChange={(e) => setAiTopic(e.target.value)}
-                    placeholder="e.g. Python OOP, French Revolution, Organic Chemistry, Microeconomics"
-                    className="w-full rounded-xl border border-slate-200 dark:border-white/[0.1] bg-slate-50 dark:bg-[#1e2530] p-3 text-sm text-slate-800 dark:text-[#e2e8f0] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500"
-                    disabled={aiLoading}
-                  />
-                </div>
+              {/* Mode Selector Tabs: By Topic vs From Notes / Syllabus */}
+              <div className="flex rounded-xl bg-slate-100 dark:bg-[#1e2530] p-1 mb-4">
+                <button
+                  type="button"
+                  onClick={() => { setAiMode("topic"); setAiError(""); }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                    aiMode === "topic"
+                      ? "bg-white dark:bg-[#252d3a] text-violet-600 dark:text-violet-400 shadow-xs"
+                      : "text-slate-500 dark:text-[#94a3b8] hover:text-slate-800 dark:hover:text-white"
+                  }`}
+                >
+                  <span>🔍</span> By Topic
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAiMode("notes"); setAiError(""); }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                    aiMode === "notes"
+                      ? "bg-white dark:bg-[#252d3a] text-violet-600 dark:text-violet-400 shadow-xs"
+                      : "text-slate-500 dark:text-[#94a3b8] hover:text-slate-800 dark:hover:text-white"
+                  }`}
+                >
+                  <span>📄</span> From Notes / Syllabus
+                </button>
+              </div>
 
-                {/* Popular topic suggestions */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 dark:text-[#64748b] mb-1.5">
-                    Popular exam topics:
-                  </label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {SUGGESTED_TOPICS.map((topic) => (
-                      <button
-                        key={topic}
-                        type="button"
-                        onClick={() => setAiTopic(topic)}
+              <form onSubmit={handleGenerateAiQuiz} className="space-y-4">
+                {aiMode === "topic" ? (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-[#cbd5e1] mb-1.5">
+                        Quiz Topic / Exam Subject
+                      </label>
+                      <input
+                        type="text"
+                        required={aiMode === "topic"}
+                        value={aiTopic}
+                        onChange={(e) => setAiTopic(e.target.value)}
+                        placeholder="e.g. Python OOP, French Revolution, Organic Chemistry, Microeconomics"
+                        className="w-full rounded-xl border border-slate-200 dark:border-white/[0.1] bg-slate-50 dark:bg-[#1e2530] p-3 text-sm text-slate-800 dark:text-[#e2e8f0] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500"
                         disabled={aiLoading}
-                        className="rounded-lg bg-slate-100 dark:bg-[#1e2530] hover:bg-violet-50 dark:hover:bg-violet-500/[0.15] hover:text-violet-600 dark:hover:text-violet-400 px-2.5 py-1 text-xs text-slate-600 dark:text-[#cbd5e1] transition-colors"
-                      >
-                        {topic}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                      />
+                    </div>
+
+                    {/* Popular topic suggestions */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 dark:text-[#64748b] mb-1.5">
+                        Popular exam topics:
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {SUGGESTED_TOPICS.map((topic) => (
+                          <button
+                            key={topic}
+                            type="button"
+                            onClick={() => setAiTopic(topic)}
+                            disabled={aiLoading}
+                            className="rounded-lg bg-slate-100 dark:bg-[#1e2530] hover:bg-violet-50 dark:hover:bg-violet-500/[0.15] hover:text-violet-600 dark:hover:text-violet-400 px-2.5 py-1 text-xs text-slate-600 dark:text-[#cbd5e1] transition-colors"
+                          >
+                            {topic}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-[#cbd5e1]">
+                          Paste Lecture Slides, Notes or Syllabus
+                        </label>
+                        <span className="text-[10px] text-slate-400 dark:text-[#64748b]">
+                          {aiNotes.length} chars
+                        </span>
+                      </div>
+                      <textarea
+                        rows={5}
+                        required={aiMode === "notes"}
+                        value={aiNotes}
+                        onChange={(e) => setAiNotes(e.target.value)}
+                        placeholder="Paste lecture slides text, chapter summaries, syllabus guidelines, or study notes here..."
+                        className="w-full rounded-xl border border-slate-200 dark:border-white/[0.1] bg-slate-50 dark:bg-[#1e2530] p-3 text-xs text-slate-800 dark:text-[#e2e8f0] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 leading-relaxed font-mono"
+                        disabled={aiLoading}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-[#cbd5e1] mb-1">
+                        Quiz Subject / Title <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={aiTopic}
+                        onChange={(e) => setAiTopic(e.target.value)}
+                        placeholder="e.g. Molecular Genetics Chapter 5 or Midterm Quiz"
+                        className="w-full rounded-xl border border-slate-200 dark:border-white/[0.1] bg-slate-50 dark:bg-[#1e2530] p-2.5 text-xs text-slate-800 dark:text-[#e2e8f0] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        disabled={aiLoading}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>

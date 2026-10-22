@@ -22,6 +22,7 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import TermsOfUsePage from "./pages/TermsOfUsePage";
+import FloatingStudyCopilot from "./components/FloatingStudyCopilot";
 
 function AppLayout() {
   const location = useLocation();
@@ -66,6 +67,7 @@ function AppLayout() {
         {/* 404 — authenticated users see the Not Found page, guests go to login */}
         <Route path="*" element={user ? <NotFoundPage /> : <Navigate to="/login" replace />} />
       </Routes>
+      {!isAuthPage && <FloatingStudyCopilot />}
     </div>
   );
 }

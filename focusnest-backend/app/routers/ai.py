@@ -137,15 +137,28 @@ class ExplainRequest(BaseModel):
 
 
 class FlashcardRequest(BaseModel):
-    topic: str
+    topic: Optional[str] = ""
     difficulty: str = "Medium"
     count: int = 8
+    notes: Optional[str] = None
 
 
 class McqRequest(BaseModel):
-    topic: str
+    topic: Optional[str] = ""
     difficulty: str = "Medium"
     count: int = 8
+    notes: Optional[str] = None
+
+
+class CopilotHistoryItem(BaseModel):
+    role: str
+    content: str
+
+
+class CopilotRequest(BaseModel):
+    message: str
+    history: Optional[List[CopilotHistoryItem]] = []
+    context: Optional[str] = None
 
 
 class BatchTaskItem(BaseModel):
@@ -337,11 +350,38 @@ Use clear markdown formatting with bold terms and spacing.
 
 @router.post("/flashcards")
 async def generate_flashcards_endpoint(req: FlashcardRequest):
-    topic = req.topic.strip()
-    if not topic:
-        raise HTTPException(status_code=400, detail="Topic is required.")
+    topic = (req.topic or "").strip()
+    notes = (req.notes or "").strip()
+    if not topic and not notes:
+        raise HTTPException(status_code=400, detail="Topic or Notes is required.")
 
-    prompt = f"""
+    if not topic:
+        topic = "Notes / Course Material"
+
+    if notes:
+        prompt = f"""
+Generate exactly {req.count} high-yield study flashcards based DIRECTLY on the provided course notes, lecture slides, or syllabus.
+Difficulty level: {req.difficulty}.
+Context / Subject: "{topic}"
+
+COURSE MATERIAL / NOTES:
+\"\"\"
+{notes[:12000]}
+\"\"\"
+
+Requirements:
+- Ground questions and answers strictly in the provided notes.
+- Focus on definitions, core concepts, formulas, and key facts.
+- Return ONLY a valid JSON array of objects with no markdown fences, no conversational preamble:
+[
+  {{
+    "front": "Active recall question or concept prompt directly from the notes",
+    "back": "Clear, precise answer according to the notes (max 2 sentences)"
+  }}
+]
+"""
+    else:
+        prompt = f"""
 Generate exactly {req.count} high-yield study flashcards for "{topic}".
 Difficulty level: {req.difficulty}.
 
@@ -363,6 +403,10 @@ Return ONLY a valid JSON array of objects with no markdown fences, no conversati
             "id": int(datetime.now().timestamp() * 1000) + idx,
             "front": item.get("front", "Question"),
             "back": item.get("back", "Answer"),
+            "interval": 0,
+            "repetition": 0,
+            "easeFactor": 2.5,
+            "dueDate": datetime.now().isoformat(),
         }
         for idx, item in enumerate(parsed)
     ]
@@ -371,11 +415,43 @@ Return ONLY a valid JSON array of objects with no markdown fences, no conversati
 
 @router.post("/mcqs")
 async def generate_mcqs_endpoint(req: McqRequest):
-    topic = req.topic.strip()
-    if not topic:
-        raise HTTPException(status_code=400, detail="Topic is required.")
+    topic = (req.topic or "").strip()
+    notes = (req.notes or "").strip()
+    if not topic and not notes:
+        raise HTTPException(status_code=400, detail="Topic or Notes is required.")
 
-    prompt = f"""
+    if not topic:
+        topic = "Notes / Course Material"
+
+    if notes:
+        prompt = f"""
+Generate exactly {req.count} multiple choice questions (MCQs) based DIRECTLY on the provided course notes, lecture slides, or syllabus.
+Difficulty level: {req.difficulty}.
+Context / Subject: "{topic}"
+
+COURSE MATERIAL / NOTES:
+\"\"\"
+{notes[:12000]}
+\"\"\"
+
+Each question must be directly testable against the notes and contain:
+- "question": Question string
+- "options": Array of 4 plausible choices
+- "correct": 0-based integer index of the correct option (0 for A, 1 for B, 2 for C, 3 for D)
+- "explanation": 1-2 sentence explanation citing the reason from the material.
+
+Return ONLY a valid JSON array of objects in this exact format:
+[
+  {{
+    "question": "Question text here?",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correct": 0,
+    "explanation": "Explanation here."
+  }}
+]
+"""
+    else:
+        prompt = f"""
 Generate exactly {req.count} multiple choice questions (MCQs) for "{topic}".
 Difficulty level: {req.difficulty}.
 
@@ -425,6 +501,37 @@ Return ONLY a valid JSON array of objects in this exact format:
         })
 
     return {"questions": formatted}
+
+
+@router.post("/copilot")
+async def copilot_chat(req: CopilotRequest):
+    msg = req.message.strip()
+    if not msg:
+        raise HTTPException(status_code=400, detail="Message is required.")
+
+    system_instruction = (
+        "You are the FocusNest Floating AI Study Copilot, an ultra-helpful, concise, and encouraging academic tutor. "
+        "Students consult you while studying, doing practice tests, reviewing flashcards, or managing deadlines. "
+        "Keep your explanations clear, structured, and easy to read with bullet points, bold key terms, simple analogies, "
+        "or memorable mnemonics when asked. Be concise and direct without overwhelming fluff."
+    )
+    if req.context:
+        system_instruction += f"\nCurrent student context/page: {req.context}"
+
+    formatted_history = []
+    if req.history:
+        for item in req.history[-6:]:
+            role_label = "Student" if item.role == "user" else "Tutor"
+            formatted_history.append(f"{role_label}: {item.content}")
+
+    if formatted_history:
+        history_str = "\n".join(formatted_history)
+        full_prompt = f"Previous conversation:\n{history_str}\n\nStudent: {msg}\n\nTutor:"
+    else:
+        full_prompt = msg
+
+    reply = await call_gemini(full_prompt, system_instruction=system_instruction, is_json=False)
+    return {"reply": reply.strip()}
 
 
 @router.post("/batch-add-tasks", status_code=status.HTTP_201_CREATED)

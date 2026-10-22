@@ -133,16 +133,22 @@ export const api = {
       body: JSON.stringify({ tasks }),
     }),
 
-  aiFlashcards: (topic, difficulty = "Medium", count = 8) =>
+  aiFlashcards: (topic, difficulty = "Medium", count = 8, notes = null) =>
     request("/ai/flashcards", {
       method: "POST",
-      body: JSON.stringify({ topic, difficulty, count }),
+      body: JSON.stringify({ topic, difficulty, count, ...(notes ? { notes } : {}) }),
     }),
 
-  aiMcqs: (topic, difficulty = "Medium", count = 8) =>
+  aiMcqs: (topic, difficulty = "Medium", count = 8, notes = null) =>
     request("/ai/mcqs", {
       method: "POST",
-      body: JSON.stringify({ topic, difficulty, count }),
+      body: JSON.stringify({ topic, difficulty, count, ...(notes ? { notes } : {}) }),
+    }),
+
+  aiCopilot: (message, history = [], context = "") =>
+    request("/ai/copilot", {
+      method: "POST",
+      body: JSON.stringify({ message, history, context }),
     }),
 
   validateTopic: (topic) =>

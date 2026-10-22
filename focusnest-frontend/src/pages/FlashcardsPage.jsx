@@ -60,7 +60,9 @@ export default function FlashcardsPage() {
   });
 
   // AI Generator state
+  const [aiMode, setAiMode] = useState("topic"); // "topic" | "notes"
   const [aiTopic, setAiTopic] = useState("");
+  const [aiNotes, setAiNotes] = useState("");
   const [aiDifficulty, setAiDifficulty] = useState("Medium");
   const [aiCount, setAiCount] = useState(8);
   const [aiLoading, setAiLoading] = useState(false);
@@ -180,7 +182,80 @@ export default function FlashcardsPage() {
     setCurrentCardIndex(0);
   };
 
-  const handleRate = () => {
+  const handleRate = async (rating) => {
+    if (!currentCard || cards.length === 0) return;
+
+    const rep = currentCard.repetition || 0;
+    const ef = currentCard.easeFactor || 2.5;
+    const interval = currentCard.interval || 0;
+
+    let newRepetition = rep;
+    let newInterval = interval;
+    let newEaseFactor = ef;
+    let newDueDate = new Date().toISOString();
+
+    if (rating === "again") {
+      // Again (<1 min): reset repetition streak, schedule for immediate/same-session review
+      newRepetition = 0;
+      newInterval = 0;
+      newEaseFactor = Math.max(1.3, ef - 0.2);
+      newDueDate = new Date().toISOString();
+    } else if (rating === "hard") {
+      // Hard (1 day): 1 day interval, slightly reduce ease factor
+      newRepetition = Math.max(1, rep);
+      newInterval = 1;
+      newEaseFactor = Math.max(1.3, ef - 0.15);
+      newDueDate = new Date(Date.now() + 1 * 86400000).toISOString();
+    } else if (rating === "good") {
+      // Good (3 days base or SM-2 scaled)
+      newRepetition = rep + 1;
+      newEaseFactor = ef;
+      newInterval = rep === 0 ? 1 : rep === 1 ? 3 : Math.round(Math.max(1, interval) * ef);
+      newDueDate = new Date(Date.now() + newInterval * 86400000).toISOString();
+    } else if (rating === "easy") {
+      // Easy (7 days base or boosted)
+      newRepetition = rep + 1;
+      newEaseFactor = ef + 0.15;
+      newInterval = rep === 0 ? 3 : rep === 1 ? 7 : Math.round(Math.max(1, interval) * ef * 1.3);
+      newDueDate = new Date(Date.now() + newInterval * 86400000).toISOString();
+    }
+
+    const updatedCard = {
+      ...currentCard,
+      repetition: newRepetition,
+      interval: newInterval,
+      easeFactor: Number(newEaseFactor.toFixed(2)),
+      dueDate: newDueDate,
+      lastReviewed: new Date().toISOString(),
+    };
+
+    const targetDeck = decks.find((d) => String(d.id) === String(activeDeckId));
+    if (!targetDeck) return;
+
+    const updatedCards = targetDeck.cards.map((c) =>
+      c.id === currentCard.id ? updatedCard : c
+    );
+
+    const updatedDecks = decks.map((d) =>
+      String(d.id) === String(activeDeckId) ? { ...d, cards: updatedCards } : d
+    );
+
+    setDecks(updatedDecks);
+    try {
+      localStorage.setItem("focusnest_flashcard_decks", JSON.stringify(updatedDecks));
+      window.dispatchEvent(new Event("focusnest_decks_updated"));
+    } catch (e) {
+      console.warn("Storage update failed", e);
+    }
+
+    if (localStorage.getItem("focusnest_token") && typeof activeDeckId === "number") {
+      try {
+        await api.updateDeck(activeDeckId, { cards: updatedCards });
+      } catch (err) {
+        console.warn("Failed to sync card rating to cloud", err);
+      }
+    }
+
     handleNext();
   };
 
@@ -192,6 +267,10 @@ export default function FlashcardsPage() {
       id: Date.now(),
       front: newCard.front.trim(),
       back: newCard.back.trim(),
+      interval: 0,
+      repetition: 0,
+      easeFactor: 2.5,
+      dueDate: new Date().toISOString(),
     };
 
     if (decks.length === 0 || !activeDeckId) {
@@ -321,45 +400,69 @@ export default function FlashcardsPage() {
   // AI Generation Handler
   const handleGenerateAiDeck = async (e) => {
     e.preventDefault();
-    if (!aiTopic.trim()) return;
 
     setAiError("");
     setAiAmbiguousOptions([]);
 
-    // Validate topic first
-    setAiValidating(true);
-    try {
-      const v = await api.validateTopic(aiTopic.trim());
-      if (v.status === "invalid") {
-        setAiError(v.message || "That doesn't seem like a valid study topic.");
-        setAiValidating(false);
+    if (aiMode === "notes") {
+      if (!aiNotes.trim() || aiNotes.trim().length < 15) {
+        setAiError("Please paste your lecture slides, notes, or syllabus content (minimum 15 characters).");
         return;
       }
-      if (v.status === "ambiguous") {
-        setAiError(v.message || "This topic is ambiguous. Please clarify:");
-        setAiAmbiguousOptions(v.options || []);
-        setAiValidating(false);
+    } else {
+      if (!aiTopic.trim()) {
+        setAiError("Please enter a study topic.");
         return;
       }
-    } catch {
-      // validation error — allow through
+
+      // Validate topic first
+      setAiValidating(true);
+      try {
+        const v = await api.validateTopic(aiTopic.trim());
+        if (v.status === "invalid") {
+          setAiError(v.message || "That doesn't seem like a valid study topic.");
+          setAiValidating(false);
+          return;
+        }
+        if (v.status === "ambiguous") {
+          setAiError(v.message || "This topic is ambiguous. Please clarify:");
+          setAiAmbiguousOptions(v.options || []);
+          setAiValidating(false);
+          return;
+        }
+      } catch {
+        // validation error — allow through
+      }
+      setAiValidating(false);
     }
-    setAiValidating(false);
 
     setAiLoading(true);
     try {
-      const data = await api.aiFlashcards(aiTopic.trim(), aiDifficulty, aiCount);
+      const topicTitle = aiTopic.trim() || (aiMode === "notes" ? "Course Notes Study Deck" : "Untitled Deck");
+      const notesContent = aiMode === "notes" ? aiNotes.trim() : null;
+      const data = await api.aiFlashcards(topicTitle, aiDifficulty, aiCount, notesContent);
       const generated = data.cards || [];
 
       if (!generated.length) {
-        throw new Error("No flashcards were generated for this topic. Please try another topic or adjust difficulty.");
+        throw new Error("No flashcards were generated. Please try again with more details or adjust difficulty.");
       }
 
+      // Ensure all generated cards have SRS fields
+      const enrichedCards = generated.map((c, i) => ({
+        id: c.id || Date.now() + i,
+        front: c.front || "Concept",
+        back: c.back || "Answer",
+        interval: 0,
+        repetition: 0,
+        easeFactor: 2.5,
+        dueDate: new Date().toISOString(),
+      }));
+
       const deckPayload = {
-        title: aiTopic.trim(),
-        subject: aiTopic.trim().length > 20 ? aiTopic.trim().slice(0, 20) + "..." : aiTopic.trim(),
+        title: topicTitle,
+        subject: topicTitle.length > 20 ? topicTitle.slice(0, 20) + "..." : topicTitle,
         difficulty: aiDifficulty,
-        cards: generated,
+        cards: enrichedCards,
       };
 
       let newDeck = null;
@@ -378,12 +481,21 @@ export default function FlashcardsPage() {
         };
       }
 
-      setDecks((prev) => [newDeck, ...prev]);
+      const updatedDecks = [newDeck, ...decks];
+      setDecks(updatedDecks);
+      try {
+        localStorage.setItem("focusnest_flashcard_decks", JSON.stringify(updatedDecks));
+        window.dispatchEvent(new Event("focusnest_decks_updated"));
+      } catch (e) {
+        console.warn("Local storage save failed", e);
+      }
+
       setActiveDeckId(newDeck.id);
       setCurrentCardIndex(0);
       setIsFlipped(false);
       setIsGeneratingAi(false);
       setAiTopic("");
+      setAiNotes("");
     } catch (err) {
       setAiError(err.message || "Failed to generate flashcards. Please check your network.");
     } finally {
@@ -535,9 +647,19 @@ export default function FlashcardsPage() {
                         {deck.title}
                       </h3>
 
-                      <div className="flex items-center gap-2.5 text-xs mb-4 text-slate-500 dark:text-[#94a3b8]">
-                        <BookOpen size={14} />
-                        <span>{deck.cards?.length || 0} Flashcards</span>
+                      <div className="flex items-center gap-2 text-xs mb-4 text-slate-500 dark:text-[#94a3b8] flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <BookOpen size={14} />
+                          <span>{deck.cards?.length || 0} Flashcards</span>
+                        </div>
+                        {Array.isArray(deck.cards) && deck.cards.filter((c) => !c.dueDate || new Date(c.dueDate) <= new Date()).length > 0 && (
+                          <>
+                            <span>•</span>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 dark:bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                              {deck.cards.filter((c) => !c.dueDate || new Date(c.dueDate) <= new Date()).length} Due for Review
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -644,9 +766,17 @@ export default function FlashcardsPage() {
                   >
                     {/* Card Header Badge */}
                     <div className="flex items-center justify-between">
-                      <span className="rounded-full bg-indigo-50 dark:bg-indigo-500/[0.15] px-3 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                        {activeDeck?.subject || "Topic"}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-indigo-50 dark:bg-indigo-500/[0.15] px-3 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                          {activeDeck?.subject || "Topic"}
+                        </span>
+                        {currentCard?.interval !== undefined && (
+                          <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-[#1e2530] px-2.5 py-0.5 text-[10px] font-bold text-slate-600 dark:text-[#94a3b8]">
+                            <span>🔁 {currentCard.interval === 0 ? "Due Today" : `${currentCard.interval}d interval`}</span>
+                            {currentCard.repetition > 0 && <span className="text-emerald-500 font-bold">· {currentCard.repetition} streak</span>}
+                          </span>
+                        )}
+                      </div>
                       <span className="flex items-center gap-1 text-xs font-medium text-slate-400 dark:text-[#64748b]">
                         <RotateCw size={12} className={isFlipped ? "rotate-180 transition-transform" : ""} />
                         {isFlipped ? "Answer" : "Question"}
@@ -683,9 +813,9 @@ export default function FlashcardsPage() {
 
             {/* Card Controls */}
             {cards.length > 0 && (
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl bg-white dark:bg-[#161b22] p-4 border border-slate-100 dark:border-white/[0.07] shadow-sm mb-6">
+              <div className="flex flex-col lg:flex-row items-center justify-between gap-4 rounded-2xl bg-white dark:bg-[#161b22] p-4 border border-slate-100 dark:border-white/[0.07] shadow-sm mb-6">
                 {/* Navigation */}
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+                <div className="flex items-center gap-2 w-full lg:w-auto justify-between lg:justify-start">
                   <button
                     onClick={handlePrev}
                     disabled={cards.length <= 1}
@@ -711,28 +841,43 @@ export default function FlashcardsPage() {
                   </button>
                 </div>
 
-                {/* Self-Rating (Active Recall) */}
-                <div className="flex items-center gap-2 w-full sm:w-auto">
+                {/* SM-2 Spaced Repetition Response Buttons */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full lg:w-auto">
+                  <button
+                    onClick={() => handleRate("again")}
+                    disabled={cards.length === 0}
+                    className="flex flex-col items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-500/[0.1] hover:bg-rose-100 dark:hover:bg-rose-500/[0.18] text-rose-700 dark:text-rose-400 border border-rose-200/80 dark:border-rose-500/20 px-3 py-2 transition-all active:scale-95 disabled:opacity-50 min-w-[90px]"
+                    title="Reset review streak (SM-2 Repeat)"
+                  >
+                    <span className="text-xs font-bold leading-none">Again</span>
+                    <span className="text-[10px] opacity-75 font-medium mt-0.5">&lt;1 min</span>
+                  </button>
                   <button
                     onClick={() => handleRate("hard")}
                     disabled={cards.length === 0}
-                    className="flex-1 sm:flex-none rounded-xl bg-red-50 dark:bg-red-500/[0.1] hover:bg-red-100 dark:hover:bg-red-500/[0.15] text-red-600 dark:text-red-400 px-4 py-2 text-xs font-bold transition-colors disabled:opacity-50"
+                    className="flex flex-col items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-500/[0.1] hover:bg-amber-100 dark:hover:bg-amber-500/[0.18] text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-500/20 px-3 py-2 transition-all active:scale-95 disabled:opacity-50 min-w-[90px]"
+                    title="Review tomorrow"
                   >
-                    Hard (Review Soon)
+                    <span className="text-xs font-bold leading-none">Hard</span>
+                    <span className="text-[10px] opacity-75 font-medium mt-0.5">1 day</span>
                   </button>
                   <button
                     onClick={() => handleRate("good")}
                     disabled={cards.length === 0}
-                    className="flex-1 sm:flex-none rounded-xl bg-amber-50 dark:bg-amber-500/[0.1] hover:bg-amber-100 dark:hover:bg-amber-500/[0.15] text-amber-600 dark:text-amber-400 px-4 py-2 text-xs font-bold transition-colors disabled:opacity-50"
+                    className="flex flex-col items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/[0.1] hover:bg-indigo-100 dark:hover:bg-indigo-500/[0.18] text-indigo-700 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-500/20 px-3 py-2 transition-all active:scale-95 disabled:opacity-50 min-w-[90px]"
+                    title="Good recall (SM-2 scheduled)"
                   >
-                    Good
+                    <span className="text-xs font-bold leading-none">Good</span>
+                    <span className="text-[10px] opacity-75 font-medium mt-0.5">3 days</span>
                   </button>
                   <button
                     onClick={() => handleRate("easy")}
                     disabled={cards.length === 0}
-                    className="flex-1 sm:flex-none rounded-xl bg-emerald-50 dark:bg-emerald-500/[0.1] hover:bg-emerald-100 dark:hover:bg-emerald-500/[0.15] text-emerald-600 dark:text-emerald-400 px-4 py-2 text-xs font-bold transition-colors disabled:opacity-50"
+                    className="flex flex-col items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-500/[0.1] hover:bg-emerald-100 dark:hover:bg-emerald-500/[0.18] text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-500/20 px-3 py-2 transition-all active:scale-95 disabled:opacity-50 min-w-[90px]"
+                    title="Mastered card (7+ days)"
                   >
-                    Easy (Mastered)
+                    <span className="text-xs font-bold leading-none">Easy</span>
+                    <span className="text-[10px] opacity-75 font-medium mt-0.5">7 days</span>
                   </button>
                 </div>
               </div>
@@ -774,41 +919,107 @@ export default function FlashcardsPage() {
                 )}
               </div>
 
-              <form onSubmit={handleGenerateAiDeck} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-[#cbd5e1] mb-1.5">
-                    Topic / Concept / Chapter
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={aiTopic}
-                    onChange={(e) => setAiTopic(e.target.value)}
-                    placeholder="e.g. Photosynthesis, Binary Search Trees, Cold War, Thermodynamics"
-                    className="w-full rounded-xl border border-slate-200 dark:border-white/[0.1] bg-slate-50 dark:bg-[#1e2530] p-3 text-sm text-slate-800 dark:text-[#e2e8f0] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    disabled={aiLoading}
-                  />
-                </div>
+              {/* Mode Selector Tabs: By Topic vs From Notes / Syllabus */}
+              <div className="flex rounded-xl bg-slate-100 dark:bg-[#1e2530] p-1 mb-4">
+                <button
+                  type="button"
+                  onClick={() => { setAiMode("topic"); setAiError(""); }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                    aiMode === "topic"
+                      ? "bg-white dark:bg-[#252d3a] text-indigo-600 dark:text-indigo-400 shadow-xs"
+                      : "text-slate-500 dark:text-[#94a3b8] hover:text-slate-800 dark:hover:text-white"
+                  }`}
+                >
+                  <span>🔍</span> By Topic
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAiMode("notes"); setAiError(""); }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                    aiMode === "notes"
+                      ? "bg-white dark:bg-[#252d3a] text-indigo-600 dark:text-indigo-400 shadow-xs"
+                      : "text-slate-500 dark:text-[#94a3b8] hover:text-slate-800 dark:hover:text-white"
+                  }`}
+                >
+                  <span>📄</span> From Notes / Syllabus
+                </button>
+              </div>
 
-                {/* Popular topic suggestions */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 dark:text-[#64748b] mb-1.5">
-                    Or try a popular topic:
-                  </label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {POPULAR_TOPICS.map((topic) => (
-                      <button
-                        key={topic}
-                        type="button"
-                        onClick={() => setAiTopic(topic)}
+              <form onSubmit={handleGenerateAiDeck} className="space-y-4">
+                {aiMode === "topic" ? (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-[#cbd5e1] mb-1.5">
+                        Topic / Concept / Chapter
+                      </label>
+                      <input
+                        type="text"
+                        required={aiMode === "topic"}
+                        value={aiTopic}
+                        onChange={(e) => setAiTopic(e.target.value)}
+                        placeholder="e.g. Photosynthesis, Binary Search Trees, Cold War, Thermodynamics"
+                        className="w-full rounded-xl border border-slate-200 dark:border-white/[0.1] bg-slate-50 dark:bg-[#1e2530] p-3 text-sm text-slate-800 dark:text-[#e2e8f0] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         disabled={aiLoading}
-                        className="rounded-lg bg-slate-100 dark:bg-[#1e2530] hover:bg-indigo-50 dark:hover:bg-indigo-500/[0.18] hover:text-indigo-600 dark:hover:text-indigo-400 px-2.5 py-1 text-xs text-slate-600 dark:text-[#cbd5e1] transition-colors"
-                      >
-                        {topic}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                      />
+                    </div>
+
+                    {/* Popular topic suggestions */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 dark:text-[#64748b] mb-1.5">
+                        Or try a popular topic:
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {POPULAR_TOPICS.map((topic) => (
+                          <button
+                            key={topic}
+                            type="button"
+                            onClick={() => setAiTopic(topic)}
+                            disabled={aiLoading}
+                            className="rounded-lg bg-slate-100 dark:bg-[#1e2530] hover:bg-indigo-50 dark:hover:bg-indigo-500/[0.18] hover:text-indigo-600 dark:hover:text-indigo-400 px-2.5 py-1 text-xs text-slate-600 dark:text-[#cbd5e1] transition-colors"
+                          >
+                            {topic}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-[#cbd5e1]">
+                          Paste Lecture Slides, Notes or Syllabus
+                        </label>
+                        <span className="text-[10px] text-slate-400 dark:text-[#64748b]">
+                          {aiNotes.length} chars
+                        </span>
+                      </div>
+                      <textarea
+                        rows={5}
+                        required={aiMode === "notes"}
+                        value={aiNotes}
+                        onChange={(e) => setAiNotes(e.target.value)}
+                        placeholder="Paste lecture slides text, chapter summaries, syllabus guidelines, or study notes here..."
+                        className="w-full rounded-xl border border-slate-200 dark:border-white/[0.1] bg-slate-50 dark:bg-[#1e2530] p-3 text-xs text-slate-800 dark:text-[#e2e8f0] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed font-mono"
+                        disabled={aiLoading}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-[#cbd5e1] mb-1">
+                        Deck Subject / Title <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={aiTopic}
+                        onChange={(e) => setAiTopic(e.target.value)}
+                        placeholder="e.g. Biology Ch. 3: Cell Division, or Midterm Review"
+                        className="w-full rounded-xl border border-slate-200 dark:border-white/[0.1] bg-slate-50 dark:bg-[#1e2530] p-2.5 text-xs text-slate-800 dark:text-[#e2e8f0] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        disabled={aiLoading}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>

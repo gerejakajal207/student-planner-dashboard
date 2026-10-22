@@ -28,6 +28,44 @@ export default function Navbar() {
     localStorage.setItem("theme", newTheme);
   };
 
+  const [dueCardsCount, setDueCardsCount] = useState(0);
+
+  useEffect(() => {
+    const calculateDue = () => {
+      try {
+        const saved = localStorage.getItem("focusnest_flashcard_decks");
+        if (!saved) {
+          setDueCardsCount(0);
+          return;
+        }
+        const decks = JSON.parse(saved);
+        if (!Array.isArray(decks)) return;
+        const now = new Date();
+        let count = 0;
+        for (const deck of decks) {
+          if (Array.isArray(deck.cards)) {
+            for (const card of deck.cards) {
+              if (!card.dueDate || new Date(card.dueDate) <= now) {
+                count++;
+              }
+            }
+          }
+        }
+        setDueCardsCount(count);
+      } catch (e) {
+        console.warn("Could not calculate due cards", e);
+      }
+    };
+
+    calculateDue();
+    window.addEventListener("focusnest_decks_updated", calculateDue);
+    window.addEventListener("storage", calculateDue);
+    return () => {
+      window.removeEventListener("focusnest_decks_updated", calculateDue);
+      window.removeEventListener("storage", calculateDue);
+    };
+  }, []);
+
   const navClass = ({ isActive }) =>
     isActive
       ? "bg-white/15 dark:bg-white/10 text-white font-semibold px-3.5 py-1.5 rounded-full text-sm backdrop-blur-md shadow-sm border border-white/20"
@@ -62,7 +100,17 @@ export default function Navbar() {
             Calendar
           </NavLink>
           <NavLink to="/revise" className={navClass}>
-            Flashcards
+            <span className="flex items-center gap-1.5">
+              <span>Flashcards</span>
+              {dueCardsCount > 0 && (
+                <span
+                  title={`${dueCardsCount} Cards Due for Review Today`}
+                  className="rounded-full bg-rose-500 text-white px-1.5 py-0.2 text-[10px] font-black tracking-tight shadow-xs animate-pulse"
+                >
+                  {dueCardsCount} Due
+                </span>
+              )}
+            </span>
           </NavLink>
           <NavLink to="/mcq-test" className={navClass}>
             MCQ Quiz
@@ -139,7 +187,7 @@ export default function Navbar() {
                 <X size={18} />
               </button>
             </div>
-            <DrawerContent close={() => setOpen(false)} />
+            <DrawerContent close={() => setOpen(false)} dueCardsCount={dueCardsCount} />
           </aside>
         </div>
       )}

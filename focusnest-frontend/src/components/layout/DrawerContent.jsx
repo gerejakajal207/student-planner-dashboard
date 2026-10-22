@@ -11,7 +11,7 @@ import {
   Kanban,
 } from "lucide-react";
 
-export default function DrawerContent({ close }) {
+export default function DrawerContent({ close, dueCardsCount = 0 }) {
   return (
     <div className="space-y-6 p-5">
       <Section title="MAIN DASHBOARD">
@@ -53,6 +53,7 @@ export default function DrawerContent({ close }) {
           label="Flashcards Revision"
           sub="Spaced repetition practice"
           close={close}
+          badge={dueCardsCount > 0 ? `${dueCardsCount} Due` : null}
         />
         <NavItem
           to="/mcq-test"
@@ -95,7 +96,7 @@ function Section({ title, children }) {
   );
 }
 
-function NavItem({ to, icon: Icon, label, sub, close, highlight }) {
+function NavItem({ to, icon: Icon, label, sub, close, highlight, badge }) {
   return (
     <NavLink
       to={to}
@@ -120,8 +121,13 @@ function NavItem({ to, icon: Icon, label, sub, close, highlight }) {
         <Icon size={16} />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <p className="text-sm font-medium leading-tight truncate">{label}</p>
+          {badge && (
+            <span className="rounded-full bg-rose-500 text-white px-1.5 py-0.2 text-[9px] font-bold">
+              {badge}
+            </span>
+          )}
           {highlight && (
             <span className="rounded bg-amber-100 dark:bg-amber-500/20 px-1 py-0.2 text-[9px] font-bold text-amber-700 dark:text-amber-400">
               AI
