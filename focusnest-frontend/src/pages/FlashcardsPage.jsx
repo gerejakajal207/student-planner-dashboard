@@ -10,7 +10,6 @@ import {
   Sparkles,
   X,
   FolderPlus,
-  Cloud,
 } from "lucide-react";
 import { api } from "../api";
 
@@ -80,15 +79,12 @@ export default function FlashcardsPage() {
   const [aiAmbiguousOptions, setAiAmbiguousOptions] = useState([]);
 
   const [newCard, setNewCard] = useState({ front: "", back: "" });
-  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
-  const isLoggedIn = !!localStorage.getItem("focusnest_token");
 
   // Fetch decks from Cloud on mount if logged in, with fallback to local storage
   useEffect(() => {
     const token = localStorage.getItem("focusnest_token");
     if (!token) return;
 
-    setIsCloudSyncing(true);
     api
       .getDecks()
       .then(async (cloudDecks) => {
@@ -134,9 +130,6 @@ export default function FlashcardsPage() {
       })
       .catch((err) => {
         console.warn("Could not load cloud decks:", err);
-      })
-      .finally(() => {
-        setIsCloudSyncing(false);
       });
   }, []);
 
@@ -396,27 +389,16 @@ export default function FlashcardsPage() {
         {/* Header */}
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-2.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-500/[0.12] text-indigo-600 dark:text-indigo-400">
                 <BookOpen size={20} />
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white">
                 Flashcard Revision
               </h1>
-              {isLoggedIn ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                  <Cloud size={13} className={isCloudSyncing ? "animate-pulse" : ""} />
-                  {isCloudSyncing ? "Syncing..." : "Cloud Synced"}
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/20">
-                  <Cloud size={13} />
-                  Local
-                </span>
-              )}
             </div>
             <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-[#94a3b8]">
-              Master any topic using active recall, spaced repetition, and cloud-synced AI generation
+              Master any topic using active recall, spaced repetition, and instant AI generation
             </p>
           </div>
 
