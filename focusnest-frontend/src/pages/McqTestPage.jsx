@@ -9,6 +9,7 @@ import {
   ArrowRight,
   Sparkles,
   X,
+  Cloud,
 } from "lucide-react";
 import { api } from "../api";
 
@@ -65,7 +66,66 @@ export default function McqTestPage() {
   const [aiValidating, setAiValidating] = useState(false);
   const [aiAmbiguousOptions, setAiAmbiguousOptions] = useState([]);
 
-  // Persist quizzes
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const isLoggedIn = !!localStorage.getItem("focusnest_token");
+
+  // Fetch quizzes from Cloud on mount if logged in, with fallback to local storage
+  useEffect(() => {
+    const token = localStorage.getItem("focusnest_token");
+    if (!token) return;
+
+    setIsCloudSyncing(true);
+    api
+      .getQuizzes()
+      .then(async (cloudQuizzes) => {
+        if (Array.isArray(cloudQuizzes) && cloudQuizzes.length > 0) {
+          setQuizzes(cloudQuizzes);
+          setSelectedQuizId((prev) => {
+            if (prev && cloudQuizzes.some((q) => String(q.id) === String(prev))) return prev;
+            return cloudQuizzes[0]?.id || null;
+          });
+        } else {
+          // Cloud has no quizzes yet. Check if there are local quizzes to migrate to cloud
+          const saved = localStorage.getItem("focusnest_mcq_quizzes");
+          if (saved) {
+            try {
+              const localQuizzes = JSON.parse(saved).filter((q) => q.id !== "cs-default");
+              if (localQuizzes.length > 0) {
+                const migrated = [];
+                for (const lq of localQuizzes) {
+                  try {
+                    const savedQuiz = await api.createQuiz({
+                      title: lq.title,
+                      subject: lq.subject || lq.title,
+                      difficulty: lq.difficulty || "Medium",
+                      questions: lq.questions || [],
+                      best_score: lq.best_score || null,
+                    });
+                    migrated.push(savedQuiz);
+                  } catch (e) {
+                    console.warn("Could not auto-migrate quiz:", e);
+                  }
+                }
+                if (migrated.length > 0) {
+                  setQuizzes(migrated);
+                  setSelectedQuizId(migrated[0].id);
+                }
+              }
+            } catch (e) {
+              console.error("Failed to parse local quizzes for migration", e);
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load cloud quizzes:", err);
+      })
+      .finally(() => {
+        setIsCloudSyncing(false);
+      });
+  }, []);
+
+  // Persist quizzes to localStorage for fast offline caching
   useEffect(() => {
     try {
       localStorage.setItem("focusnest_mcq_quizzes", JSON.stringify(quizzes));
@@ -74,7 +134,7 @@ export default function McqTestPage() {
     }
   }, [quizzes]);
 
-  const activeQuiz = quizzes.find((q) => q.id === selectedQuizId) || quizzes[0] || null;
+  const activeQuiz = quizzes.find((q) => String(q.id) === String(selectedQuizId)) || quizzes[0] || null;
   const questions = activeQuiz?.questions || [];
   const currentQ = questions[currentQIndex] || null;
 
@@ -87,12 +147,37 @@ export default function McqTestPage() {
     setShowExplanation(true);
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     setShowExplanation(false);
     if (currentQIndex < questions.length - 1) {
       setCurrentQIndex((prev) => prev + 1);
     } else {
       setIsSubmitted(true);
+      // Calculate final accuracy score
+      const finalScore = questions.reduce((acc, q, idx) => {
+        return selectedAnswers[idx] === q.correct ? acc + 1 : acc;
+      }, 0);
+      const finalPercentage = questions.length > 0 ? Math.round((finalScore / questions.length) * 100) : 0;
+
+      // Update quiz best_score locally
+      setQuizzes((prev) =>
+        prev.map((q) => {
+          if (String(q.id) === String(selectedQuizId)) {
+            const updatedBest = q.best_score == null ? finalPercentage : Math.max(q.best_score, finalPercentage);
+            return { ...q, best_score: updatedBest };
+          }
+          return q;
+        })
+      );
+
+      // Persist best score to cloud if logged in
+      if (localStorage.getItem("focusnest_token") && typeof selectedQuizId === "number") {
+        try {
+          await api.updateQuizScore(selectedQuizId, finalPercentage);
+        } catch (e) {
+          console.warn("Failed to update quiz score in cloud", e);
+        }
+      }
     }
   };
 
@@ -103,12 +188,20 @@ export default function McqTestPage() {
     setShowExplanation(false);
   };
 
-  const handleDeleteQuiz = (quizId) => {
-    const remaining = quizzes.filter((q) => q.id !== quizId);
+  const handleDeleteQuiz = async (quizId) => {
+    const remaining = quizzes.filter((q) => String(q.id) !== String(quizId));
     setQuizzes(remaining);
-    if (selectedQuizId === quizId) {
+    if (String(selectedQuizId) === String(quizId)) {
       setSelectedQuizId(remaining[0]?.id || null);
       handleRestart();
+    }
+
+    if (localStorage.getItem("focusnest_token") && typeof quizId === "number") {
+      try {
+        await api.deleteQuiz(quizId);
+      } catch (err) {
+        console.warn("Failed to delete quiz from cloud", err);
+      }
     }
   };
 
@@ -149,13 +242,28 @@ export default function McqTestPage() {
         throw new Error("No MCQs were generated for this topic. Please try another topic or adjust difficulty.");
       }
 
-      const newQuiz = {
-        id: `ai-quiz-${Date.now()}`,
+      const quizPayload = {
         title: aiTopic.trim(),
         subject: aiTopic.trim().length > 22 ? aiTopic.trim().slice(0, 22) + "..." : aiTopic.trim(),
         difficulty: aiDifficulty,
         questions: generatedQuestions,
       };
+
+      let newQuiz = null;
+      if (localStorage.getItem("focusnest_token")) {
+        try {
+          newQuiz = await api.createQuiz(quizPayload);
+        } catch (err) {
+          console.warn("Cloud save AI quiz failed, saving locally:", err);
+        }
+      }
+
+      if (!newQuiz) {
+        newQuiz = {
+          id: `ai-quiz-${Date.now()}`,
+          ...quizPayload,
+        };
+      }
 
       setQuizzes((prev) => [newQuiz, ...prev]);
       setSelectedQuizId(newQuiz.id);
@@ -184,16 +292,27 @@ export default function McqTestPage() {
         {/* Header */}
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400">
                 <Brain size={20} />
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white">
                 MCQ Practice Test
               </h1>
+              {isLoggedIn ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <Cloud size={13} className={isCloudSyncing ? "animate-pulse" : ""} />
+                  {isCloudSyncing ? "Syncing..." : "Cloud Synced"}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/20">
+                  <Cloud size={13} />
+                  Local
+                </span>
+              )}
             </div>
             <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-[#94a3b8]">
-              Generate 8–10 tailored exam questions on any topic with instant feedback & explanations
+              Generate 8–10 tailored exam questions on any topic with cloud-synced score tracking
             </p>
           </div>
 
@@ -272,7 +391,7 @@ export default function McqTestPage() {
                       handleRestart();
                     }}
                     className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
-                      selectedQuizId === quiz.id
+                      String(selectedQuizId) === String(quiz.id)
                         ? "bg-violet-600 text-white shadow-md shadow-violet-200 dark:shadow-violet-950/50"
                         : "bg-white dark:bg-[#161b22] text-slate-700 dark:text-[#cbd5e1] border border-slate-200 dark:border-white/[0.07] hover:bg-slate-100 dark:hover:bg-[#1e2530]"
                     }`}
@@ -280,12 +399,12 @@ export default function McqTestPage() {
                     <span>{quiz.title}</span>
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                        selectedQuizId === quiz.id
+                        String(selectedQuizId) === String(quiz.id)
                           ? "bg-white/20 text-white"
                           : "bg-slate-100 dark:bg-[#1e2530] text-slate-500 dark:text-[#94a3b8]"
                       }`}
                     >
-                      {quiz.questions?.length || 0} Qs
+                      {quiz.questions?.length || 0} Qs{quiz.best_score != null ? ` · ${quiz.best_score}%` : ""}
                     </span>
                   </button>
 

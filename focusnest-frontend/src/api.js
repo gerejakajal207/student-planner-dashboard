@@ -150,4 +150,44 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ topic }),
     }),
+
+  // ── Flashcard Decks (Cloud Sync) ──
+  getDecks: () => request("/decks/"),
+
+  createDeck: (deckData) =>
+    request("/decks/", {
+      method: "POST",
+      body: JSON.stringify(deckData),
+    }),
+
+  updateDeck: (deckId, deckData) =>
+    request(`/decks/${deckId}`, {
+      method: "PUT",
+      body: JSON.stringify(deckData),
+    }),
+
+  deleteDeck: (deckId) =>
+    request(`/decks/${deckId}`, {
+      method: "DELETE",
+    }),
+
+  // ── MCQ Quizzes (Cloud Sync) ──
+  getQuizzes: () => request("/quizzes/"),
+
+  createQuiz: (quizData) =>
+    request("/quizzes/", {
+      method: "POST",
+      body: JSON.stringify(quizData),
+    }),
+
+  updateQuizScore: (quizId, score) =>
+    request(`/quizzes/${quizId}/score`, {
+      method: "PATCH",
+      body: JSON.stringify({ score }),
+    }),
+
+  deleteQuiz: (quizId) =>
+    request(`/quizzes/${quizId}`, {
+      method: "DELETE",
+    }),
 };

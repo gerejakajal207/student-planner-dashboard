@@ -92,3 +92,56 @@ class TaskOut(BaseModel):
     class Config:
         from_attributes = True
         use_enum_values = True
+
+
+# ── Deck (Flashcard) Schemas ──
+
+from typing import List, Any, Dict
+
+class DeckCreate(BaseModel):
+    title: str
+    subject: Optional[str] = ""
+    difficulty: Optional[str] = "Medium"
+    cards: Optional[List[Any]] = []
+
+class DeckUpdate(BaseModel):
+    title: Optional[str] = None
+    subject: Optional[str] = None
+    difficulty: Optional[str] = None
+    cards: Optional[List[Any]] = None
+
+class DeckOut(BaseModel):
+    id: int
+    title: str
+    subject: str
+    difficulty: str
+    cards: List[Any]
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ── Quiz (MCQ) Schemas ──
+
+class QuizCreate(BaseModel):
+    title: str
+    subject: Optional[str] = ""
+    difficulty: Optional[str] = "Medium"
+    questions: Optional[List[Any]] = []
+    best_score: Optional[int] = None
+
+class QuizScoreUpdate(BaseModel):
+    score: int
+
+class QuizOut(BaseModel):
+    id: int
+    title: str
+    subject: str
+    difficulty: str
+    questions: List[Any]
+    best_score: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

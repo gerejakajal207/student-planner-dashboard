@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
-from app.routers import users, tasks, quotes, ai
+from app.routers import users, tasks, quotes, ai, decks, quizzes
 
 load_dotenv()
 
@@ -97,6 +97,8 @@ app.include_router(users.router)
 app.include_router(tasks.router)
 app.include_router(quotes.router)          
 app.include_router(ai.router)          
+app.include_router(decks.router)
+app.include_router(quizzes.router)          
 
 
 @app.get("/")

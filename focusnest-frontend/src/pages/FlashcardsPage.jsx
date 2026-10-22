@@ -10,6 +10,7 @@ import {
   Sparkles,
   X,
   FolderPlus,
+  Cloud,
 } from "lucide-react";
 import { api } from "../api";
 
@@ -79,8 +80,67 @@ export default function FlashcardsPage() {
   const [aiAmbiguousOptions, setAiAmbiguousOptions] = useState([]);
 
   const [newCard, setNewCard] = useState({ front: "", back: "" });
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const isLoggedIn = !!localStorage.getItem("focusnest_token");
 
-  // Persist decks
+  // Fetch decks from Cloud on mount if logged in, with fallback to local storage
+  useEffect(() => {
+    const token = localStorage.getItem("focusnest_token");
+    if (!token) return;
+
+    setIsCloudSyncing(true);
+    api
+      .getDecks()
+      .then(async (cloudDecks) => {
+        if (Array.isArray(cloudDecks) && cloudDecks.length > 0) {
+          setDecks(cloudDecks);
+          setActiveDeckId((prev) => {
+            if (prev && cloudDecks.some((d) => String(d.id) === String(prev))) return prev;
+            return cloudDecks[0]?.id || null;
+          });
+        } else {
+          // Cloud has no decks yet. Check if there are local decks to migrate to cloud
+          const saved = localStorage.getItem("focusnest_flashcard_decks");
+          if (saved) {
+            try {
+              const localDecks = JSON.parse(saved).filter(
+                (d) => !["cs-default", "math-default", "bio-default"].includes(d.id)
+              );
+              if (localDecks.length > 0) {
+                const migrated = [];
+                for (const ld of localDecks) {
+                  try {
+                    const savedDeck = await api.createDeck({
+                      title: ld.title,
+                      subject: ld.subject || ld.title,
+                      difficulty: ld.difficulty || "Medium",
+                      cards: ld.cards || [],
+                    });
+                    migrated.push(savedDeck);
+                  } catch (e) {
+                    console.warn("Could not auto-migrate deck:", e);
+                  }
+                }
+                if (migrated.length > 0) {
+                  setDecks(migrated);
+                  setActiveDeckId(migrated[0].id);
+                }
+              }
+            } catch (e) {
+              console.error("Failed to parse local decks for migration", e);
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load cloud decks:", err);
+      })
+      .finally(() => {
+        setIsCloudSyncing(false);
+      });
+  }, []);
+
+  // Persist decks to localStorage for fast offline access
   useEffect(() => {
     try {
       localStorage.setItem("focusnest_flashcard_decks", JSON.stringify(decks));
@@ -89,7 +149,7 @@ export default function FlashcardsPage() {
     }
   }, [decks]);
 
-  const activeDeck = decks.find((d) => d.id === activeDeckId) || decks[0] || null;
+  const activeDeck = decks.find((d) => String(d.id) === String(activeDeckId)) || decks[0] || null;
   const cards = activeDeck?.cards || [];
   const currentCard = cards[currentCardIndex] || null;
 
@@ -110,7 +170,7 @@ export default function FlashcardsPage() {
     setIsFlipped(false);
     setDecks((prev) =>
       prev.map((d) => {
-        if (d.id === activeDeckId) {
+        if (String(d.id) === String(activeDeckId)) {
           return { ...d, cards: [...d.cards].sort(() => Math.random() - 0.5) };
         }
         return d;
@@ -123,7 +183,7 @@ export default function FlashcardsPage() {
     handleNext();
   };
 
-  const handleAddCard = (e) => {
+  const handleAddCard = async (e) => {
     e.preventDefault();
     if (!newCard.front.trim() || !newCard.back.trim()) return;
 
@@ -134,26 +194,47 @@ export default function FlashcardsPage() {
     };
 
     if (decks.length === 0 || !activeDeckId) {
-      const newDeck = {
-        id: `deck-${Date.now()}`,
+      const deckPayload = {
         title: "My Custom Deck",
         subject: "General",
         difficulty: "Medium",
         cards: [created],
       };
+      let newDeck = null;
+      if (localStorage.getItem("focusnest_token")) {
+        try {
+          newDeck = await api.createDeck(deckPayload);
+        } catch (err) {
+          console.warn("Cloud save deck failed", err);
+        }
+      }
+      if (!newDeck) {
+        newDeck = { id: `deck-${Date.now()}`, ...deckPayload };
+      }
       setDecks([newDeck]);
       setActiveDeckId(newDeck.id);
       setCurrentCardIndex(0);
     } else {
+      const targetDeck = decks.find((d) => String(d.id) === String(activeDeckId));
+      const updatedCards = targetDeck ? [...targetDeck.cards, created] : [created];
+
       setDecks((prev) =>
-        prev.map((d) => (d.id === activeDeckId ? { ...d, cards: [...d.cards, created] } : d))
+        prev.map((d) => (String(d.id) === String(activeDeckId) ? { ...d, cards: updatedCards } : d))
       );
+
+      if (localStorage.getItem("focusnest_token") && typeof activeDeckId === "number") {
+        try {
+          await api.updateDeck(activeDeckId, { cards: updatedCards });
+        } catch (err) {
+          console.warn("Failed to update deck in cloud", err);
+        }
+      }
     }
     setNewCard({ front: "", back: "" });
     setIsAddingCard(false);
   };
 
-  const handleCreateDeck = (e) => {
+  const handleCreateDeck = async (e) => {
     e.preventDefault();
     if (!newDeckData.title.trim()) return;
 
@@ -166,13 +247,28 @@ export default function FlashcardsPage() {
       });
     }
 
-    const newDeck = {
-      id: `deck-${Date.now()}`,
+    const deckPayload = {
       title: newDeckData.title.trim(),
       subject: newDeckData.subject.trim() || newDeckData.title.trim(),
       difficulty: "Medium",
       cards: initialCards,
     };
+
+    let newDeck = null;
+    if (localStorage.getItem("focusnest_token")) {
+      try {
+        newDeck = await api.createDeck(deckPayload);
+      } catch (err) {
+        console.warn("Cloud save deck failed, saving locally:", err);
+      }
+    }
+
+    if (!newDeck) {
+      newDeck = {
+        id: `deck-${Date.now()}`,
+        ...deckPayload,
+      };
+    }
 
     setDecks((prev) => [newDeck, ...prev]);
     setActiveDeckId(newDeck.id);
@@ -182,24 +278,42 @@ export default function FlashcardsPage() {
     setIsCreatingDeck(false);
   };
 
-  const handleDeleteCard = (cardId) => {
+  const handleDeleteCard = async (cardId) => {
+    const targetDeck = decks.find((d) => String(d.id) === String(activeDeckId));
+    if (!targetDeck) return;
+    const updatedCards = targetDeck.cards.filter((c) => c.id !== cardId);
+
     setDecks((prev) =>
-      prev.map((d) =>
-        d.id === activeDeckId ? { ...d, cards: d.cards.filter((c) => c.id !== cardId) } : d
-      )
+      prev.map((d) => (String(d.id) === String(activeDeckId) ? { ...d, cards: updatedCards } : d))
     );
-    if (currentCardIndex >= cards.length - 1) {
-      setCurrentCardIndex(Math.max(0, cards.length - 2));
+    if (currentCardIndex >= updatedCards.length) {
+      setCurrentCardIndex(Math.max(0, updatedCards.length - 1));
+    }
+
+    if (localStorage.getItem("focusnest_token") && typeof activeDeckId === "number") {
+      try {
+        await api.updateDeck(activeDeckId, { cards: updatedCards });
+      } catch (err) {
+        console.warn("Failed to sync card deletion to cloud", err);
+      }
     }
   };
 
-  const handleDeleteDeck = (deckId) => {
-    const remaining = decks.filter((d) => d.id !== deckId);
+  const handleDeleteDeck = async (deckId) => {
+    const remaining = decks.filter((d) => String(d.id) !== String(deckId));
     setDecks(remaining);
-    if (activeDeckId === deckId) {
+    if (String(activeDeckId) === String(deckId)) {
       setActiveDeckId(remaining[0]?.id || null);
       setCurrentCardIndex(0);
       setIsFlipped(false);
+    }
+
+    if (localStorage.getItem("focusnest_token") && typeof deckId === "number") {
+      try {
+        await api.deleteDeck(deckId);
+      } catch (err) {
+        console.warn("Failed to delete deck from cloud", err);
+      }
     }
   };
 
@@ -240,13 +354,28 @@ export default function FlashcardsPage() {
         throw new Error("No flashcards were generated for this topic. Please try another topic or adjust difficulty.");
       }
 
-      const newDeck = {
-        id: `ai-${Date.now()}`,
+      const deckPayload = {
         title: aiTopic.trim(),
         subject: aiTopic.trim().length > 20 ? aiTopic.trim().slice(0, 20) + "..." : aiTopic.trim(),
         difficulty: aiDifficulty,
         cards: generated,
       };
+
+      let newDeck = null;
+      if (localStorage.getItem("focusnest_token")) {
+        try {
+          newDeck = await api.createDeck(deckPayload);
+        } catch (err) {
+          console.warn("Cloud save AI deck failed, saving locally:", err);
+        }
+      }
+
+      if (!newDeck) {
+        newDeck = {
+          id: `ai-${Date.now()}`,
+          ...deckPayload,
+        };
+      }
 
       setDecks((prev) => [newDeck, ...prev]);
       setActiveDeckId(newDeck.id);
@@ -267,16 +396,27 @@ export default function FlashcardsPage() {
         {/* Header */}
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-500/[0.12] text-indigo-600 dark:text-indigo-400">
                 <BookOpen size={20} />
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white">
                 Flashcard Revision
               </h1>
+              {isLoggedIn ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <Cloud size={13} className={isCloudSyncing ? "animate-pulse" : ""} />
+                  {isCloudSyncing ? "Syncing..." : "Cloud Synced"}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/20">
+                  <Cloud size={13} />
+                  Local
+                </span>
+              )}
             </div>
             <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-[#94a3b8]">
-              Master any topic using active recall, spaced repetition, and instant AI generation
+              Master any topic using active recall, spaced repetition, and cloud-synced AI generation
             </p>
           </div>
 
@@ -367,7 +507,7 @@ export default function FlashcardsPage() {
                         setIsFlipped(false);
                       }}
                       className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
-                        activeDeckId === deck.id
+                        String(activeDeckId) === String(deck.id)
                           ? "bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-950/80/50"
                           : "bg-white dark:bg-[#161b22] text-slate-700 dark:text-[#cbd5e1] border border-slate-200 dark:border-white/[0.07] hover:bg-slate-100 dark:hover:bg-[#1e2530]"
                       }`}
@@ -375,7 +515,7 @@ export default function FlashcardsPage() {
                       <span>{deck.title}</span>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                          activeDeckId === deck.id
+                          String(activeDeckId) === String(deck.id)
                             ? "bg-white/20 text-white"
                             : "bg-slate-100 dark:bg-[#1e2530] text-slate-500 dark:text-[#94a3b8]"
                         }`}

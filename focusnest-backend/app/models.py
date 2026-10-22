@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Text, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Text, Boolean, JSON
 from sqlalchemy.orm import relationship
+from datetime import datetime
 from .database import Base
 import enum
 
@@ -78,6 +79,8 @@ class User(Base):
 
     tasks         = relationship("Task", back_populates="owner", cascade="all, delete-orphan")
     reset_tokens  = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
+    decks         = relationship("Deck", back_populates="user", cascade="all, delete-orphan")
+    quizzes       = relationship("Quiz", back_populates="user", cascade="all, delete-orphan")
 
 
 class PasswordResetToken(Base):
@@ -106,3 +109,33 @@ class Task(Base):
     focus_minutes = Column(Integer, default=0, nullable=False)
     owner_id      = Column(Integer, ForeignKey("users.id"), nullable=False)
     owner         = relationship("User", back_populates="tasks")
+
+
+class Deck(Base):
+    __tablename__ = "decks"
+
+    id         = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    title      = Column(Text, nullable=False)
+    subject    = Column(Text, default="")
+    difficulty = Column(String(50), default="Medium")
+    cards      = Column(JSON, default=list, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    user_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    user = relationship("User", back_populates="decks")
+
+
+class Quiz(Base):
+    __tablename__ = "quizzes"
+
+    id         = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    title      = Column(Text, nullable=False)
+    subject    = Column(Text, default="")
+    difficulty = Column(String(50), default="Medium")
+    questions  = Column(JSON, default=list, nullable=False)
+    best_score = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    user_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    user = relationship("User", back_populates="quizzes")
+
