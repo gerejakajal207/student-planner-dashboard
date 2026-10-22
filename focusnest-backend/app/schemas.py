@@ -64,28 +64,30 @@ class TaskStatusUpdate(BaseModel):
         use_enum_values = True
 
 class TaskUpdate(BaseModel):
-    title:       Optional[str] = None
-    description: Optional[str] = None
-    subject:     Optional[str] = None
-    category:    Optional[CategoryEnum] = None
-    priority:    Optional[PriorityEnum] = None
-    effort:      Optional[EffortEnum] = None
-    due_date:    Optional[datetime] = None
-    status:      Optional[StatusEnum] = None
+    title:         Optional[str] = None
+    description:   Optional[str] = None
+    subject:       Optional[str] = None
+    category:      Optional[CategoryEnum] = None
+    priority:      Optional[PriorityEnum] = None
+    effort:        Optional[EffortEnum] = None
+    due_date:      Optional[datetime] = None
+    status:        Optional[StatusEnum] = None
+    focus_minutes: Optional[int] = None
 
     class Config:
         use_enum_values = True
 
 class TaskOut(BaseModel):
-    id:          int
-    title:       str
-    description: str
-    subject:     str
-    category:    CategoryEnum
-    priority:    PriorityEnum
-    effort:      EffortEnum
-    due_date:    datetime
-    status:      StatusEnum
+    id:            int
+    title:         str
+    description:   str
+    subject:       str
+    category:      CategoryEnum
+    priority:      PriorityEnum
+    effort:        EffortEnum
+    due_date:      datetime
+    status:        StatusEnum
+    focus_minutes: int = 0
 
     class Config:
         from_attributes = True

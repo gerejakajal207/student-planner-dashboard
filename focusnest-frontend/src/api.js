@@ -96,6 +96,11 @@ export const api = {
       method: "DELETE",
     }),
 
+  logTaskFocus: (taskId, minutes = 25) =>
+    request(`/tasks/${taskId}/log-focus?minutes=${minutes}`, {
+      method: "POST",
+    }),
+
   getQuote: () => request("/quotes/random"),
 
   // ── AI Assistant ──

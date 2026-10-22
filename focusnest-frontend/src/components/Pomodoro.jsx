@@ -1,10 +1,14 @@
 import { useState } from "react";
-import { Settings, Play, Pause, RotateCcw, SkipForward, Flame } from "lucide-react";
+import { Settings, Play, Pause, RotateCcw, SkipForward, Flame, Target, Check, X, ChevronDown } from "lucide-react";
 import PomodoroSettings from "./PomodoroSettings";
 import { useTimer } from "./TimerContext";
+import { useTasks } from "./TaskContext";
 
 export default function Pomodoro() {
   const [showSettings, setShowSettings] = useState(false);
+  const [showTaskPicker, setShowTaskPicker] = useState(false);
+
+  const { tasks, updateTaskStatus } = useTasks() || { tasks: [] };
 
   const {
     mode,
@@ -26,6 +30,9 @@ export default function Pomodoro() {
     skipToNext,
     switchMode,
     formatTime,
+    activeTask,
+    focusOnTask,
+    clearActiveTask,
   } = useTimer();
 
   // SVG circle config
@@ -94,6 +101,92 @@ export default function Pomodoro() {
         >
           Long ({longBreak}m)
         </button>
+      </div>
+
+      {/* Active Task or Link Task Box */}
+      <div className="mb-4">
+        {activeTask ? (
+          <div className="rounded-xl border border-indigo-200/80 dark:border-indigo-500/30 bg-indigo-50/70 dark:bg-indigo-500/[0.08] p-3 transition-all">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 dark:text-indigo-400">
+                <Target size={13} className={isRunning && mode === "focus" ? "animate-spin text-indigo-600" : ""} />
+                Focusing on Task
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => updateTaskStatus && updateTaskStatus(activeTask.id, "Done")}
+                  className="flex items-center gap-1 rounded-md bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-500/20 dark:hover:bg-emerald-500/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 text-[10px] font-bold transition-colors"
+                  title="Mark this task as Done"
+                >
+                  <Check size={11} /> Done
+                </button>
+                <button
+                  onClick={clearActiveTask}
+                  className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                  title="Detach task (Free Focus)"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-white truncate">
+              {activeTask.title}
+            </p>
+            <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              {activeTask.subject && <span className="font-medium text-indigo-600 dark:text-indigo-400 truncate max-w-[120px]">{activeTask.subject}</span>}
+              {activeTask.subject && <span>·</span>}
+              <span className="font-semibold text-indigo-600 dark:text-indigo-400">⏱️ {activeTask.focus_minutes || 0}m logged</span>
+            </div>
+          </div>
+        ) : (
+          <div className="relative">
+            <button
+              onClick={() => setShowTaskPicker(!showTaskPicker)}
+              className="w-full flex items-center justify-between gap-1.5 rounded-xl border border-dashed border-slate-200 dark:border-white/[0.1] hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-500/[0.05] p-2.5 text-xs font-medium text-slate-500 dark:text-slate-400 transition-all"
+            >
+              <div className="flex items-center gap-2">
+                <Target size={14} className="text-indigo-500 flex-shrink-0" />
+                <span className="truncate">Link a task to track focus time...</span>
+              </div>
+              <ChevronDown size={14} className={`text-slate-400 transition-transform ${showTaskPicker ? "rotate-180" : ""}`} />
+            </button>
+
+            {/* Task Picker Dropdown */}
+            {showTaskPicker && (
+              <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-48 overflow-y-auto rounded-xl bg-white dark:bg-[#1e2530] p-1.5 shadow-xl border border-slate-200 dark:border-white/[0.1] text-left animate-fadeIn">
+                {tasks && tasks.filter((t) => t.status !== "Done").length > 0 ? (
+                  tasks
+                    .filter((t) => t.status !== "Done")
+                    .map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          focusOnTask(t);
+                          setShowTaskPicker(false);
+                        }}
+                        className="w-full flex items-center justify-between rounded-lg p-2 text-left hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <p className="text-xs font-semibold text-slate-800 dark:text-[#e2e8f0] truncate">{t.title}</p>
+                          <p className="text-[10px] text-slate-400 dark:text-[#64748b] truncate">{t.subject || t.category}</p>
+                        </div>
+                        {t.focus_minutes > 0 && (
+                          <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                            {t.focus_minutes}m
+                          </span>
+                        )}
+                      </button>
+                    ))
+                ) : (
+                  <p className="p-3 text-center text-xs text-slate-400 dark:text-[#64748b]">
+                    No pending tasks found. Create a task first!
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Circular Timer Display */}

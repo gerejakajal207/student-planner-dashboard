@@ -108,6 +108,28 @@ export function TaskProvider({ children }) {
     }
   }
 
+  async function logFocus(id, minutes = 25) {
+    try {
+      const updated = await api.logTaskFocus(id, minutes);
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === id ? { ...t, focus_minutes: updated.focus_minutes ?? ((t.focus_minutes || 0) + minutes) } : t
+        )
+      );
+      recordActivity(user?.id);
+      return true;
+    } catch (err) {
+      console.warn("Could not sync task focus to backend, updating locally:", err.message);
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === id ? { ...t, focus_minutes: (t.focus_minutes || 0) + minutes } : t
+        )
+      );
+      recordActivity(user?.id);
+      return false;
+    }
+  }
+
   return (
     <TaskContext.Provider value={{
       tasks,
@@ -118,6 +140,7 @@ export function TaskProvider({ children }) {
       editTask,
       updateTaskStatus,
       deleteTask,
+      logFocus,
     }}>
       {children}
     </TaskContext.Provider>

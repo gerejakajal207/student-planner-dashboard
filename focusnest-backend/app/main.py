@@ -82,6 +82,15 @@ def on_startup():
         # Ignore if already text or database dialect does not require it
         print(f"Column migration notice (normal if already TEXT): {e}")
 
+    # Ensure focus_minutes column exists on tasks table
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS focus_minutes INTEGER DEFAULT 0;"))
+            conn.commit()
+            print("Tasks table focus_minutes column verified/added.")
+    except Exception as e:
+        print(f"focus_minutes column migration notice: {e}")
+
 
 
 app.include_router(users.router)

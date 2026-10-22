@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useDrag, useDrop, DndProvider } from "react-dnd";
 import { HTML5toTouch } from "rdndmb-html5-to-touch";
 import { MultiBackend } from "react-dnd-multi-backend";
-import { GripVertical, Plus, Trash2, Edit2 } from "lucide-react";
+import { GripVertical, Plus, Trash2, Edit2, Play } from "lucide-react";
 import { useTasks } from "../components/TaskContext";
+import { useTimer } from "../components/TimerContext";
 import TaskModal from "../components/TaskModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 
@@ -37,7 +38,7 @@ const EFFORT_STYLES = {
 };
 
 // ---------- Task Card ----------
-function DraggableTaskCard({ task, columnColor, onEdit, onDeleteRequest }) {
+function DraggableTaskCard({ task, columnColor, onEdit, onDeleteRequest, activeTaskId, onFocus }) {
   const [{ isDragging }, drag] = useDrag({
     type: ItemType,
     item: { id: task.id },
@@ -51,6 +52,7 @@ function DraggableTaskCard({ task, columnColor, onEdit, onDeleteRequest }) {
   };
   const pri = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.Medium;
   const eff = EFFORT_STYLES[task.effort] ?? EFFORT_STYLES.Medium;
+  const isActiveFocus = activeTaskId === task.id;
 
   return (
     <div
@@ -59,7 +61,11 @@ function DraggableTaskCard({ task, columnColor, onEdit, onDeleteRequest }) {
         isDragging ? "rotate-1 scale-95 opacity-30" : "opacity-100"
       }`}
     >
-      <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#1e2530] shadow-sm transition-all duration-150 hover:border-slate-300 dark:hover:border-white/[0.14] hover:shadow-md dark:shadow-black/20">
+      <div className={`overflow-hidden rounded-2xl border bg-white dark:bg-[#1e2530] shadow-sm transition-all duration-150 hover:shadow-md dark:shadow-black/20 ${
+        isActiveFocus
+          ? "border-indigo-500 ring-2 ring-indigo-500 shadow-md"
+          : "border-slate-200 dark:border-white/[0.07] hover:border-slate-300 dark:hover:border-white/[0.14]"
+      }`}>
         {/* Accent Bar */}
         <div className="h-1 w-full" style={{ backgroundColor: columnColor }} />
 
@@ -81,6 +87,22 @@ function DraggableTaskCard({ task, columnColor, onEdit, onDeleteRequest }) {
             </div>
 
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {onFocus && task.status !== "Done" && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFocus(task);
+                  }}
+                  className={`flex-shrink-0 rounded-lg p-1 transition-colors ${
+                    isActiveFocus
+                      ? "bg-indigo-600 text-white"
+                      : "text-slate-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/[0.15] hover:text-indigo-600"
+                  }`}
+                  title={isActiveFocus ? "Active in Pomodoro focus" : "Focus on this task with Pomodoro"}
+                >
+                  <Play size={13} className={isActiveFocus ? "fill-white" : ""} />
+                </button>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -131,6 +153,11 @@ function DraggableTaskCard({ task, columnColor, onEdit, onDeleteRequest }) {
             >
               {task.effort}
             </span>
+            {task.focus_minutes > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 dark:bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
+                ⏱️ {task.focus_minutes}m
+              </span>
+            )}
             {task.date && (
               <span className="ml-auto text-[10px] font-semibold text-slate-400 dark:text-[#64748b]">
                 {new Date(task.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
@@ -144,7 +171,7 @@ function DraggableTaskCard({ task, columnColor, onEdit, onDeleteRequest }) {
 }
 
 // ---------- Column ----------
-function Column({ status, title, color, tasks, onDrop, onEdit, onDeleteRequest }) {
+function Column({ status, title, color, tasks, onDrop, onEdit, onDeleteRequest, activeTaskId, onFocus }) {
   const [{ isOver }, drop] = useDrop({
     accept: ItemType,
     drop: (item) => onDrop(item.id, status),
@@ -192,6 +219,8 @@ function Column({ status, title, color, tasks, onDrop, onEdit, onDeleteRequest }
               columnColor={color}
               onEdit={onEdit}
               onDeleteRequest={onDeleteRequest}
+              activeTaskId={activeTaskId}
+              onFocus={onFocus}
             />
           ))
         )}
@@ -203,6 +232,7 @@ function Column({ status, title, color, tasks, onDrop, onEdit, onDeleteRequest }
 // ---------- Main Page ----------
 export default function KanbanPage() {
   const { tasks, addTask, editTask, updateTaskStatus, deleteTask } = useTasks();
+  const { activeTask, focusOnTask } = useTimer();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // task id to delete
@@ -270,6 +300,8 @@ export default function KanbanPage() {
                   onDrop={(id, status) => updateTaskStatus(id, status)}
                   onEdit={handleEdit}
                   onDeleteRequest={(id) => setConfirmDelete(id)}
+                  activeTaskId={activeTask?.id}
+                  onFocus={focusOnTask}
                 />
               ))}
             </div>

@@ -201,6 +201,12 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialDueDate, t
               </button>
             </div>
 
+            {isEditMode && taskToEdit?.focus_minutes > 0 && (
+              <div className="mb-4 flex items-center gap-2 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 px-3.5 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-400">
+                <span>⏱️ <strong>{taskToEdit.focus_minutes} mins</strong> focused on this task via Pomodoro</span>
+              </div>
+            )}
+
             <div className="flex flex-col gap-4">
               {/* Task Title */}
               <div>

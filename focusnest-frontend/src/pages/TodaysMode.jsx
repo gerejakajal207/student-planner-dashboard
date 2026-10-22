@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Flame, BookOpen, CheckCircle2, Circle, Edit2, Trash2, Zap, Clock, Filter } from "lucide-react";
+import { Plus, Flame, BookOpen, CheckCircle2, Circle, Edit2, Trash2, Zap, Clock, Filter, Play } from "lucide-react";
 import Pomodoro from "../components/Pomodoro";
 import QuoteCard from "../components/QuoteCard";
 import ProgressCard from "../components/todays-mode/ProgressCard";
@@ -32,15 +32,16 @@ const PRIORITY_STYLES = {
   Low:    { text: "text-slate-400", bg: "bg-slate-100 dark:bg-[#1e2530]",   dot: "bg-slate-400" },
 };
 
-function TaskRow({ task, onEdit, onToggleStatus, onDelete }) {
+function TaskRow({ task, onEdit, onToggleStatus, onDelete, activeTaskId, onFocus }) {
   const cat = CATEGORY_COLORS[task.category] ?? { bar: "bg-slate-400", badge: "bg-slate-100 dark:bg-[#1e2530] text-slate-500" };
   const pri = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.Medium;
   const isDone = task.status === "Done";
+  const isActiveFocus = activeTaskId === task.id;
 
   return (
     <div
       className={`group flex items-center gap-3 sm:gap-4 rounded-2xl border bg-white dark:bg-[#161b22] px-4 py-3.5 shadow-sm transition-all duration-150
-        ${isDone ? "border-emerald-200/80 dark:border-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-500/[0.04] opacity-75" : "border-slate-100 dark:border-white/[0.07] hover:border-indigo-200 dark:hover:border-indigo-500/40 hover:shadow-md"}
+        ${isDone ? "border-emerald-200/80 dark:border-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-500/[0.04] opacity-75" : isActiveFocus ? "border-indigo-400 dark:border-indigo-500 bg-indigo-50/30 dark:bg-indigo-500/[0.04] ring-1 ring-indigo-400 dark:ring-indigo-500 shadow-md" : "border-slate-100 dark:border-white/[0.07] hover:border-indigo-200 dark:hover:border-indigo-500/40 hover:shadow-md"}
       `}
     >
       {/* Checkbox toggle */}
@@ -65,14 +66,41 @@ function TaskRow({ task, onEdit, onToggleStatus, onDelete }) {
         <p className={`text-sm font-semibold text-slate-800 dark:text-white truncate ${isDone ? "line-through text-slate-400 dark:text-[#64748b]" : ""}`}>
           {task.title}
         </p>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-xs text-slate-400 dark:text-[#64748b] truncate">{task.subject}</span>
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <span className="text-xs text-slate-400 dark:text-[#64748b] truncate max-w-[120px]">{task.subject}</span>
           <span className="text-slate-300 dark:text-slate-700 text-xs">·</span>
           <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${cat.badge}`}>
             {task.category}
           </span>
+          {task.focus_minutes > 0 && (
+            <>
+              <span className="text-slate-300 dark:text-slate-700 text-xs">·</span>
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 rounded-full px-2 py-0.5">
+                ⏱️ {task.focus_minutes}m
+              </span>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Focus in Pomodoro button */}
+      {!isDone && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onFocus(task);
+          }}
+          className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-xs font-bold transition-all active:scale-95 ${
+            isActiveFocus
+              ? "bg-indigo-600 text-white shadow-xs shadow-indigo-300 dark:shadow-indigo-950 animate-pulse"
+              : "bg-indigo-50 dark:bg-indigo-500/[0.12] hover:bg-indigo-100 dark:hover:bg-indigo-500/25 text-indigo-700 dark:text-indigo-400"
+          }`}
+          title={isActiveFocus ? "Currently in Pomodoro focus" : "Focus on this task with Pomodoro"}
+        >
+          <Play size={11} className={isActiveFocus ? "fill-white" : "fill-indigo-600 dark:fill-indigo-400"} />
+          <span className="hidden sm:inline">{isActiveFocus ? "Focusing" : "Focus"}</span>
+        </button>
+      )}
 
       {/* Priority */}
       <div className={`hidden md:flex items-center gap-1.5 rounded-full px-2.5 py-1 ${pri.bg}`}>
@@ -103,7 +131,7 @@ function TaskRow({ task, onEdit, onToggleStatus, onDelete }) {
 
 export default function TodaysPage() {
   const { tasks, addTask, editTask, updateTaskStatus, deleteTask } = useTasks();
-  const { isRunning, startTimer, pauseTimer } = useTimer();
+  const { isRunning, startTimer, pauseTimer, activeTask, focusOnTask } = useTimer();
 
   const [openTaskModal, setOpenTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -336,6 +364,8 @@ export default function TodaysPage() {
                 <TaskRow
                   key={task.id}
                   task={task}
+                  activeTaskId={activeTask?.id}
+                  onFocus={focusOnTask}
                   onEdit={() => {
                     setEditingTask(task);
                     setOpenTaskModal(true);

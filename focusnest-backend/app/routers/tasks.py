@@ -95,7 +95,30 @@ def update_task(
         task.due_date = data.due_date
     if data.status is not None:
         task.status = models.to_status_enum(data.status)
+    if data.focus_minutes is not None:
+        task.focus_minutes = max(0, data.focus_minutes)
 
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.post("/{task_id}/log-focus", response_model=schemas.TaskOut)
+def log_task_focus(
+    task_id: int,
+    minutes: int = 25,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    task = db.query(models.Task).filter(
+        models.Task.id == task_id,
+        models.Task.owner_id == current_user.id
+    ).first()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    task.focus_minutes = (task.focus_minutes or 0) + max(1, minutes)
     db.commit()
     db.refresh(task)
     return task

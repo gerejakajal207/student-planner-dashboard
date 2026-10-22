@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import { useTasks } from "./TaskContext";
 
 const TimerContext = createContext();
 
@@ -120,6 +121,29 @@ export function TimerProvider({ children }) {
 
   const initial = getInitialState();
 
+  const { logFocus } = useTasks() || {};
+
+  const [activeTask, setActiveTask] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem("focusnest_pomodoro_task");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (activeTask) {
+        sessionStorage.setItem("focusnest_pomodoro_task", JSON.stringify(activeTask));
+      } else {
+        sessionStorage.removeItem("focusnest_pomodoro_task");
+      }
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [activeTask]);
+
   const [mode, setMode] = useState(initial.mode);
   const [focusTime, setFocusTime] = useState(initial.focusTime);
   const [shortBreak, setShortBreak] = useState(initial.shortBreak);
@@ -140,6 +164,23 @@ export function TimerProvider({ children }) {
     },
     [focusTime, shortBreak, longBreak]
   );
+
+  const focusOnTask = useCallback(
+    (task) => {
+      if (!task) return;
+      setActiveTask(task);
+      setMode("focus");
+      const duration = focusTime * 60;
+      setTimeLeft(duration);
+      setIsRunning(true);
+      setEndTime(Date.now() + duration * 1000);
+    },
+    [focusTime]
+  );
+
+  const clearActiveTask = useCallback(() => {
+    setActiveTask(null);
+  }, []);
 
   // Sync state to sessionStorage whenever key fields change
   useEffect(() => {
@@ -171,6 +212,11 @@ export function TimerProvider({ children }) {
       const nextCount = completedSessions + 1;
       setCompletedSessions(nextCount);
 
+      // Auto-log focus minutes directly to the task
+      if (activeTask?.id && logFocus) {
+        logFocus(activeTask.id, focusTime);
+      }
+
       const isLong = nextCount % interval === 0;
       const nextMode = isLong ? "longBreak" : "shortBreak";
       const nextDuration = isLong ? longBreak * 60 : shortBreak * 60;
@@ -178,11 +224,12 @@ export function TimerProvider({ children }) {
       setMode(nextMode);
       setTimeLeft(nextDuration);
 
+      const taskName = activeTask?.title ? ` on "${activeTask.title}"` : "";
       sendBrowserNotification(
         "Focus Session Complete! 🎯",
         isLong
-          ? `Awesome work! You completed ${nextCount} sessions. Time for a well-deserved ${longBreak}-minute Long Break!`
-          : `Great job! Session ${nextCount} finished. Enjoy your ${shortBreak}-minute Short Break.`
+          ? `Awesome work! Completed ${nextCount} sessions${taskName}. Time for a well-deserved ${longBreak}-minute Long Break!`
+          : `Great job! Logged ${focusTime} mins of focus${taskName}. Enjoy your ${shortBreak}-minute Short Break.`
       );
     } else {
       // Break is finished
@@ -194,7 +241,7 @@ export function TimerProvider({ children }) {
         `Ready to jump back in? Click here to start your next ${focusTime}-minute Focus session.`
       );
     }
-  }, [mode, completedSessions, interval, longBreak, shortBreak, focusTime]);
+  }, [mode, completedSessions, interval, longBreak, shortBreak, focusTime, activeTask, logFocus]);
 
   // Main countdown tick loop (timestamp-based)
   useEffect(() => {
@@ -335,6 +382,10 @@ export function TimerProvider({ children }) {
         switchMode,
         formatTime,
         requestNotificationPermission,
+        activeTask,
+        setActiveTask,
+        focusOnTask,
+        clearActiveTask,
       }}
     >
       {children}

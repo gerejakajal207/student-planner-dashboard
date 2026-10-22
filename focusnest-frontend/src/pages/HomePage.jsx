@@ -111,7 +111,14 @@ function ScheduleItem({ task, onEdit }) {
         <p className="text-sm font-medium text-slate-800 dark:text-[#e2e8f0] truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
           {task.title}
         </p>
-        <p className="text-xs text-slate-400 dark:text-[#64748b] truncate">{task.subject}</p>
+        <p className="text-xs text-slate-400 dark:text-[#64748b] truncate flex items-center gap-1.5">
+          <span>{task.subject}</span>
+          {task.focus_minutes > 0 && (
+            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 rounded-full px-1.5 py-0.5">
+              ⏱️ {task.focus_minutes}m
+            </span>
+          )}
+        </p>
       </div>
       <span className={`text-xs font-semibold flex-shrink-0 ${PRIORITY_TEXT[task.priority] ?? "text-slate-400"}`}>
         {task.priority}
