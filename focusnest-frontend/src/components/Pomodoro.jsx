@@ -13,6 +13,7 @@ import {
   Headphones,
   Volume2,
   VolumeX,
+  Bell,
 } from "lucide-react";
 import PomodoroSettings from "./PomodoroSettings";
 import { useTimer } from "./TimerContext";
@@ -54,6 +55,7 @@ export default function Pomodoro() {
     soundscapePlaying,
     setSoundscapePlaying,
     notificationPermission,
+    requestNotificationPermission,
   } = useTimer();
 
   // SVG circle config
@@ -293,6 +295,32 @@ export default function Pomodoro() {
           <SkipForward size={16} />
         </button>
       </div>
+
+      {/* ── DESKTOP NOTIFICATIONS PROMPT ── */}
+      {notificationPermission !== "granted" && (
+        <div className="mt-4 flex items-center justify-between gap-2.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-3 py-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Bell size={14} className="text-amber-600 dark:text-amber-400 flex-shrink-0 animate-bounce" />
+            <p className="text-[11px] font-medium text-amber-900 dark:text-amber-200 truncate">
+              {notificationPermission === "denied"
+                ? "Desktop notifications blocked by browser"
+                : "Enable desktop alerts for other tabs & apps"}
+            </p>
+          </div>
+          {notificationPermission === "denied" ? (
+            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 flex-shrink-0" title="Click URL lock icon to allow">
+              Check Site Lock 🔒
+            </span>
+          ) : (
+            <button
+              onClick={requestNotificationPermission}
+              className="rounded-lg bg-amber-600 hover:bg-amber-700 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs transition-all flex-shrink-0 active:scale-95"
+            >
+              Enable
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── AMBIENT SOUNDSCAPES ── */}
       <div className="mt-5 rounded-2xl bg-slate-50 dark:bg-[#1e2530]/60 p-3.5 border border-slate-100 dark:border-white/[0.05]">

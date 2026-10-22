@@ -265,6 +265,13 @@ function playAmbientSoundscape(type, volume = 0.5) {
   }
 }
 
+// Register Service Worker for background desktop notifications
+if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  navigator.serviceWorker
+    .register("/sw.js")
+    .catch((err) => console.warn("SW register error:", err));
+}
+
 // Request and send Chrome/Browser Notifications
 async function requestNotificationPermission() {
   if (typeof window === "undefined" || !("Notification" in window)) {
@@ -285,14 +292,41 @@ function sendBrowserNotification(title, body) {
   if (typeof window === "undefined" || !("Notification" in window)) {
     return;
   }
-  if (Notification.permission === "granted") {
-    try {
-      const notification = new Notification(title, {
-        body,
-        icon: "/favicon.ico",
-        tag: "focusnest-pomodoro",
-        requireInteraction: true,
+  if (Notification.permission !== "granted") {
+    return;
+  }
+
+  const options = {
+    body,
+    icon: "/logo192.png",
+    badge: "/favicon.ico",
+    tag: "focusnest-pomodoro-alert",
+    renotify: true,
+    requireInteraction: true,
+    silent: false,
+  };
+
+  // 1. Try Service Worker showNotification (works in background tabs & minimized browser)
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.ready
+      .then((reg) => {
+        reg.showNotification(title, options);
+      })
+      .catch(() => {
+        try {
+          const notification = new Notification(title, options);
+          notification.onclick = function () {
+            window.focus();
+            this.close();
+          };
+        } catch (e) {
+          console.warn("Notification error:", e);
+        }
       });
+  } else {
+    // 2. Direct Window Notification
+    try {
+      const notification = new Notification(title, options);
       notification.onclick = function () {
         window.focus();
         this.close();
@@ -300,18 +334,6 @@ function sendBrowserNotification(title, body) {
     } catch (e) {
       console.warn("Notification error:", e);
     }
-  } else if (Notification.permission === "default") {
-    Notification.requestPermission().then((perm) => {
-      if (perm === "granted") {
-        try {
-          new Notification(title, {
-            body,
-            icon: "/favicon.ico",
-            tag: "focusnest-pomodoro",
-          });
-        } catch {}
-      }
-    });
   }
 }
 
@@ -418,24 +440,31 @@ export function TimerProvider({ children }) {
   const handleRequestPermission = useCallback(async () => {
     const perm = await requestNotificationPermission();
     setNotificationPermission(perm);
+    if (perm === "granted") {
+      sendBrowserNotification(
+        "FocusNest Desktop Notifications Enabled! 🎯",
+        "You will now receive desktop notifications even when you are on another tab or app!"
+      );
+    }
     return perm;
   }, []);
 
   const testNotification = useCallback(async () => {
     playAlertChime();
     const perm = await handleRequestPermission();
-    sendBrowserNotification(
-      "FocusNest Notification Test 🔔",
-      "Desktop notifications and audio alerts are functioning correctly!"
-    );
+    if (perm === "granted") {
+      sendBrowserNotification(
+        "FocusNest Desktop Notification 🔔",
+        "It works! You will receive desktop notifications when sessions end, even on other tabs or apps."
+      );
+    }
     setSessionAlert({
       id: Date.now(),
-      title: "Notification Test Successful! 🔔",
+      title: perm === "granted" ? "Desktop Notification Sent! 🔔" : "Permission Needed 🔔",
       message:
-        "Audio chime and in-app alerts are active. " +
-        (perm === "granted"
-          ? "Desktop notifications are enabled."
-          : "For system desktop alerts, please allow notifications in your browser address bar."),
+        perm === "granted"
+          ? "Check your desktop screen for the Windows notification popup!"
+          : "Please click 'Allow' in Chrome's permission prompt or check the lock icon in the address bar.",
       mode: "test",
       isTest: true,
     });
@@ -443,6 +472,45 @@ export function TimerProvider({ children }) {
   }, [handleRequestPermission]);
 
   const volumeRef = useRef(soundscapeVolume);
+  const workerRef = useRef(null);
+
+  // Background Web Worker to ensure timer ticks accurately even when Chrome is minimized or in a background tab
+  useEffect(() => {
+    const workerScript = `
+      let timerId = null;
+      self.onmessage = function(e) {
+        if (e.data === 'start') {
+          if (timerId) clearInterval(timerId);
+          timerId = setInterval(function() {
+            self.postMessage('tick');
+          }, 1000);
+        } else if (e.data === 'stop') {
+          if (timerId) {
+            clearInterval(timerId);
+            timerId = null;
+          }
+        }
+      };
+    `;
+
+    try {
+      const blob = new Blob([workerScript], { type: "application/javascript" });
+      const worker = new Worker(URL.createObjectURL(blob));
+      workerRef.current = worker;
+    } catch (e) {
+      console.warn("Could not start background timer worker:", e);
+      workerRef.current = null;
+    }
+
+    return () => {
+      if (workerRef.current) {
+        try {
+          workerRef.current.terminate();
+        } catch {}
+        workerRef.current = null;
+      }
+    };
+  }, []);
 
   // Sync volume with active soundscape without recreating nodes
   useEffect(() => {
@@ -609,17 +677,35 @@ export function TimerProvider({ children }) {
       setTimeLeft(remaining);
 
       if (remaining <= 0) {
-        clearInterval(timerRef.current);
+        if (timerRef.current) clearInterval(timerRef.current);
+        if (workerRef.current) workerRef.current.postMessage("stop");
         handleSessionComplete();
       }
     };
 
     checkTime();
+
+    // 1. Standard interval
     timerRef.current = setInterval(checkTime, 1000);
+
+    // 2. Exact millisecond timeout
+    const msToFinish = Math.max(0, endTime - Date.now());
+    const exactTimeoutId = setTimeout(checkTime, msToFinish + 50);
+
+    // 3. Web Worker tick for background tabs
+    const worker = workerRef.current;
+    if (worker) {
+      worker.onmessage = (e) => {
+        if (e.data === "tick") {
+          checkTime();
+        }
+      };
+      worker.postMessage("start");
+    }
 
     // Also check on tab refocus / visibility change
     const onVisibilityChange = () => {
-      if (!document.hidden && isRunning && endTime) {
+      if (isRunning && endTime) {
         checkTime();
       }
     };
@@ -627,7 +713,12 @@ export function TimerProvider({ children }) {
     window.addEventListener("focus", onVisibilityChange);
 
     return () => {
-      clearInterval(timerRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (exactTimeoutId) clearTimeout(exactTimeoutId);
+      if (worker) {
+        worker.postMessage("stop");
+        worker.onmessage = null;
+      }
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", onVisibilityChange);
     };
