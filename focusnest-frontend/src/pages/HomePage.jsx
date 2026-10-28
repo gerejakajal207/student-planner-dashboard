@@ -179,29 +179,31 @@ export default function HomePage() {
     { icon: Clock,       value: pending.length,        description: "Pending / Todo",  colorClass: "text-amber-500",   bgClass: "bg-amber-50 dark:bg-amber-500/[0.1]"   },
   ];
 
-  // AI Morning Briefing Metrics
+  // AI Morning Briefing Metrics (only calculated when tasks exist)
+  const hasTasks = Boolean(tasks && tasks.length > 0);
   const now = new Date();
-  const tasksDueIn48h = tasks.filter((t) => {
-    if (t.status === "Done") return false;
-    const taskDate = new Date(t.due_date || t.date || Date.now());
-    const diffHours = (taskDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-    return diffHours >= -12 && diffHours <= 48;
-  });
+  const tasksDueIn48h = hasTasks
+    ? tasks.filter((t) => {
+        if (t.status === "Done") return false;
+        const taskDate = new Date(t.due_date || t.date || Date.now());
+        const diffHours = (taskDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+        return diffHours >= -12 && diffHours <= 48;
+      })
+    : [];
 
   const userName = user?.name?.split(" ")[0] || "Student";
   const urgentCount = tasksDueIn48h.length;
-  const highestPriorityTask =
-    [...tasksDueIn48h].sort((a, b) => {
-      const pOrder = { High: 3, Medium: 2, Low: 1 };
-      return (pOrder[b.priority] || 2) - (pOrder[a.priority] || 2);
-    })[0] ||
-    tasks.find((t) => t.status !== "Done") || {
-      subject: "Biology",
-      title: "Cell Genetics",
-    };
+  const highestPriorityTask = hasTasks
+    ? [...tasksDueIn48h].sort((a, b) => {
+        const pOrder = { High: 3, Medium: 2, Low: 1 };
+        return (pOrder[b.priority] || 2) - (pOrder[a.priority] || 2);
+      })[0] ||
+      tasks.find((t) => t.status !== "Done") ||
+      null
+    : null;
 
-  const prioritySubject = highestPriorityTask.subject || "Biology";
-  const priorityTopic = highestPriorityTask.title || "Cell Genetics";
+  const prioritySubject = highestPriorityTask?.subject || "";
+  const priorityTopic = highestPriorityTask?.title || "";
 
   const currentHour = now.getHours();
   const greeting = getGreeting();
@@ -212,14 +214,20 @@ export default function HomePage() {
   const focusButtonLabel = `Start ${focusMinutes}m Focus`;
 
   let recommendationText = "";
-  if (isLateNight) {
-    recommendationText = `We recommend dedicating a focused 25-minute Pomodoro block to ${prioritySubject}, followed by a quick 5-minute MCQ revision on ${priorityTopic} before winding down.`;
-  } else if (currentHour >= 12 && currentHour < 17) {
-    recommendationText = `We recommend dedicating your afternoon 50-minute Pomodoro block to ${prioritySubject}, followed by a quick 5-minute MCQ revision on ${priorityTopic}.`;
-  } else if (currentHour >= 17 && currentHour < 21) {
-    recommendationText = `We recommend dedicating your evening 50-minute Pomodoro block to ${prioritySubject}, followed by a quick 5-minute MCQ revision on ${priorityTopic}.`;
+  if (highestPriorityTask) {
+    const topicText = priorityTopic ? ` on ${priorityTopic}` : "";
+    const subjectText = prioritySubject || "your priority subject";
+    if (isLateNight) {
+      recommendationText = `We recommend dedicating a focused 25-minute Pomodoro block to ${subjectText}, followed by a quick 5-minute MCQ revision${topicText} before winding down.`;
+    } else if (currentHour >= 12 && currentHour < 17) {
+      recommendationText = `We recommend dedicating your afternoon 50-minute Pomodoro block to ${subjectText}, followed by a quick 5-minute MCQ revision${topicText}.`;
+    } else if (currentHour >= 17 && currentHour < 21) {
+      recommendationText = `We recommend dedicating your evening 50-minute Pomodoro block to ${subjectText}, followed by a quick 5-minute MCQ revision${topicText}.`;
+    } else {
+      recommendationText = `We recommend dedicating your first 50-minute Pomodoro block to ${subjectText}, followed by a quick 5-minute MCQ revision${topicText}.`;
+    }
   } else {
-    recommendationText = `We recommend dedicating your first 50-minute Pomodoro block to ${prioritySubject}, followed by a quick 5-minute MCQ revision on ${priorityTopic}.`;
+    recommendationText = `All your tasks are completed! Take a well-deserved break or start a fresh focus session.`;
   }
 
   const aiBriefingText =
@@ -283,60 +291,62 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* ── AI DYNAMIC BRIEFING CARD ── */}
-        <div className="relative overflow-hidden rounded-3xl border border-indigo-200/80 dark:border-indigo-500/30 bg-gradient-to-br from-indigo-50/90 via-white to-violet-50/90 dark:from-[#161b22] dark:via-[#161b22] dark:to-indigo-950/30 p-6 sm:p-7 shadow-sm transition-all">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 relative z-10">
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-300 dark:shadow-indigo-950">
-                <Sparkles size={22} className="animate-pulse" />
-              </div>
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20 px-2.5 py-0.5 text-[10px] font-extrabold text-indigo-700 dark:text-indigo-300 tracking-wider uppercase">
-                    ✨ {briefingTitle}
-                  </span>
-                  <span className="text-[11px] font-medium text-slate-400 dark:text-[#64748b]">
-                    Curated for {userName} · {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                  </span>
+        {/* ── AI DYNAMIC BRIEFING CARD (Only when tasks exist) ── */}
+        {hasTasks && (
+          <div className="relative overflow-hidden rounded-3xl border border-indigo-200/80 dark:border-indigo-500/30 bg-gradient-to-br from-indigo-50/90 via-white to-violet-50/90 dark:from-[#161b22] dark:via-[#161b22] dark:to-indigo-950/30 p-6 sm:p-7 shadow-sm transition-all">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 relative z-10">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-300 dark:shadow-indigo-950">
+                  <Sparkles size={22} className="animate-pulse" />
                 </div>
-                <p className="text-sm sm:text-base font-semibold text-slate-800 dark:text-white leading-relaxed max-w-3xl">
-                  "{aiBriefingText}"
-                </p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20 px-2.5 py-0.5 text-[10px] font-extrabold text-indigo-700 dark:text-indigo-300 tracking-wider uppercase">
+                      ✨ {briefingTitle}
+                    </span>
+                    <span className="text-[11px] font-medium text-slate-400 dark:text-[#64748b]">
+                      Curated for {userName} · {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+                  <p className="text-sm sm:text-base font-semibold text-slate-800 dark:text-white leading-relaxed max-w-3xl">
+                    "{aiBriefingText}"
+                  </p>
+                </div>
               </div>
-            </div>
 
-            {/* Quick 1-Click Action Buttons */}
-            <div className="flex flex-wrap items-center gap-2.5 self-stretch sm:self-auto lg:flex-shrink-0">
-              <button
-                onClick={() => navigate("/todays-page")}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-200 dark:shadow-indigo-950/50 transition-all hover:scale-105 active:scale-95"
-              >
-                <Zap size={14} /> {focusButtonLabel}
-              </button>
-              <button
-                onClick={() =>
-                  navigate("/mcq-test", {
-                    state: { topic: priorityTopic, subject: prioritySubject },
-                  })
-                }
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 px-3.5 py-2.5 text-xs font-bold text-violet-700 dark:text-violet-300 transition-all active:scale-95"
-              >
-                <Brain size={14} /> Practice MCQ
-              </button>
-              <button
-                onClick={() =>
-                  navigate("/revise", {
-                    state: { topic: priorityTopic, subject: prioritySubject },
-                  })
-                }
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e2530] hover:bg-slate-50 dark:hover:bg-[#252d3a] px-3.5 py-2.5 text-xs font-semibold text-slate-700 dark:text-[#e2e8f0] transition-all active:scale-95"
-              >
-                <BookOpen size={14} /> Flashcards
-              </button>
+              {/* Quick 1-Click Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2.5 self-stretch sm:self-auto lg:flex-shrink-0">
+                <button
+                  onClick={() => navigate("/todays-page")}
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-200 dark:shadow-indigo-950/50 transition-all hover:scale-105 active:scale-95"
+                >
+                  <Zap size={14} /> {focusButtonLabel}
+                </button>
+                <button
+                  onClick={() =>
+                    navigate("/mcq-test", {
+                      ...(priorityTopic ? { state: { topic: priorityTopic, subject: prioritySubject } } : {}),
+                    })
+                  }
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 px-3.5 py-2.5 text-xs font-bold text-violet-700 dark:text-violet-300 transition-all active:scale-95"
+                >
+                  <Brain size={14} /> Practice MCQ
+                </button>
+                <button
+                  onClick={() =>
+                    navigate("/revise", {
+                      ...(priorityTopic ? { state: { topic: priorityTopic, subject: prioritySubject } } : {}),
+                    })
+                  }
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e2530] hover:bg-slate-50 dark:hover:bg-[#252d3a] px-3.5 py-2.5 text-xs font-semibold text-slate-700 dark:text-[#e2e8f0] transition-all active:scale-95"
+                >
+                  <BookOpen size={14} /> Flashcards
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* ── STATS ROW ── */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
